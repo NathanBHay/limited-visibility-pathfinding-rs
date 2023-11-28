@@ -1,0 +1,2 @@
+# Pathfinding Algorithms for Rust
+The following is a series of pathfinding algorithms implemented within Rust. Implementations are based upon [Warthog](https://bitbucket.org/dharabor/pathfinding/src/master/warthog/) by Daniel Harabor and the rest of the shortest path team. 
