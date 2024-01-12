@@ -7,6 +7,7 @@
 
 #![allow(dead_code)]
 pub mod adjacencylist;
+pub mod edgelist;
 pub mod hashedgrid;
 pub mod bitpackedgrid;
 pub mod samplegrid;
@@ -157,21 +158,24 @@ pub fn neighbors(
     x: usize, 
     y: usize, 
     diagonal: bool
-) -> impl Iterator<Item = (usize, usize)>
-{
-    let mut neighbors = vec![
-        (x.wrapping_add(1), y), // These are wrapping as avoid branching 
-        (x, y.wrapping_add(1)), // on bitpacked grids. This means bound
-        (x.wrapping_sub(1), y), // checks or padding is required.
+) -> impl Iterator<Item = (usize, usize)> {
+    let direct = vec![
+        (x.wrapping_add(1), y), // Theses are wrapping as to avoid branching
+        (x, y.wrapping_add(1)), // on BitPacked Grids
+        (x.wrapping_sub(1), y),
         (x, y.wrapping_sub(1))
-    ];
-    if diagonal {
-        neighbors.extend(vec![
+    ].into_iter();
+
+    let diagonal = if diagonal {
+        vec![
             (x.wrapping_add(1), y.wrapping_add(1)),
             (x.wrapping_sub(1), y.wrapping_add(1)),
             (x.wrapping_add(1), y.wrapping_sub(1)),
             (x.wrapping_sub(1), y.wrapping_sub(1)),
-        ]);
-    }
-    neighbors.into_iter()
+        ].into_iter()
+    } else {
+        Vec::new().into_iter()
+    };
+
+    direct.chain(diagonal)
 }

@@ -68,9 +68,8 @@ impl Mul<f32> for KalmanNode {
 
 #[cfg(test)]
 mod tests {
-    use std::f32::NAN;
-
     use super::*;
+
     #[test]
     fn test_kalman_filter() {
         let mut node = KalmanNode {

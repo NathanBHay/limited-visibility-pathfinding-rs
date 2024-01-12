@@ -6,7 +6,7 @@ pub mod uninformed;
 pub mod astar;
 pub mod dstarlite;
 pub mod samplestar;
-
+mod pathstore;
 /// Reconstructs a path from a given node to the start node
 /// ## Arguments
 /// * `parent` - A map of nodes to their parent nodes

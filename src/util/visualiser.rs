@@ -3,6 +3,9 @@ use std::{fs::File, collections::HashMap};
 
 use crate::domains::{samplegrid::SampleGrid, bitpackedgrid::BitPackedGrid, adjacencylist::AdjacencyList};
 use crate::domains::neighbors;
+
+/// Visualiser tool for `SampleGrid` 
+/// 
 pub struct Visualiser {
     file_path: String,
     start: Option<(usize, usize)>,
@@ -12,7 +15,12 @@ pub struct Visualiser {
 
 impl Visualiser {
 
-    pub fn new(file_path: &str, sample_grid: &SampleGrid, start: Option<(usize, usize)>, goal: Option<(usize, usize)>) -> Self {
+    /// Create a new visualiser for a `SampleGrid` with a start and goal
+    pub fn new(file_path: &str,
+        sample_grid: &SampleGrid,
+        start: Option<(usize, usize)>,
+        goal: Option<(usize, usize)>
+    ) -> Self {
         let visualiser = Visualiser {
             file_path: file_path.to_string(),
             start,
@@ -22,6 +30,7 @@ impl Visualiser {
         visualiser
     }
 
+    /// Visualise the ground truth of the grid
     fn visualise_ground_truth(&self, grid: &BitPackedGrid) {
         let mut ground_truth = vec![vec![false; grid.original_height]; grid.original_width];
         for x in 0..grid.original_width {
@@ -30,8 +39,6 @@ impl Visualiser {
             }
         }
         let ground_truth = json!({
-            "width": grid.original_width,
-            "height": grid.original_height,
             "grid": ground_truth,
             "start": self.start,
             "goal": self.goal,
@@ -40,11 +47,17 @@ impl Visualiser {
         serde_json::to_writer_pretty(&mut file, &ground_truth).unwrap();
     }
 
-    pub fn visualise_iteration(&self, sample_grid: &SampleGrid, iteration: usize, current: Option<(usize, usize)>, next: Option<(usize, usize)>, paths: &HashMap<(usize, usize), usize>) {
+    /// Visualise the current state of the grid and found paths
+    pub fn visualise_iteration(&self,
+        sample_grid: &SampleGrid,
+        iteration: usize,
+        current: Option<(usize,usize)>,
+        next: Option<(usize, usize)>,
+        paths: &HashMap<(usize, usize), usize>
+    ) {
         let sample_grid = json!({
             "sample_grid": get_sample_grid(&sample_grid),
-            "start": current,
-            "goal": self.goal,
+            "current": current,
             "next": next,
             "paths": hashmap_to_adjlist(paths).iter().collect::<Vec<_>>(),
         });
@@ -52,14 +65,13 @@ impl Visualiser {
         serde_json::to_writer_pretty(&mut file, &sample_grid).unwrap();
     }
 
+    /// Visualise the final path found by the algorithm
     pub fn visualise_final_path(&self, final_path: &Vec<(usize, usize)>) {
         let mut paths = HashMap::new();
         for node in final_path {
             *paths.entry(*node).or_insert(0) += 1;
         }
         let sample_grid = json!({
-            "start": self.start,
-            "goal": self.goal,
             "paths": hashmap_to_adjlist(&paths).iter().collect::<Vec<_>>(),
         });
         let mut file = File::create(format!("{}_final_path.json", self.file_path)).unwrap();

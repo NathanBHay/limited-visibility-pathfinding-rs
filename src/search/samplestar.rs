@@ -1,11 +1,18 @@
 //! # SampleStar
 //! A 
+//! 
+//! Possible Optimisations:
+//! * Get min between epochs and amount of nodes in radius which can be sampled
+//! * Cache paths
+//! Heuristics could include ones that take into account probability of being an obstacle:
+//! `self.grid.sample_grid[x][y].state * manhattan_distance(n*, self.goal)`
+
 
 use std::collections::HashMap;
 
-use crate::{domains::samplegrid::SampleGrid, heuristics::distance::manhattan_distance, util::visualiser::{Visualiser, self}};
+use crate::{domains::samplegrid::SampleGrid, heuristics::distance::manhattan_distance, util::visualiser::Visualiser, search::pathstore::AccStore};
 
-use super::astar::astar;
+use super::{astar::astar, pathstore::PathStore};
 
 /// Sample Star Algorithm
 /// ## Arguments
@@ -14,29 +21,39 @@ use super::astar::astar;
 /// * `goal` - The goal node.
 /// * `epoch` - The number of times to sample each node.
 /// * `radius` - The radius to sample around each node.
-pub struct SampleStar {
-    grid: SampleGrid,
+pub struct SampleStar
+{
+    grid:  SampleGrid,
+    previous: (usize, usize),
     current: (usize, usize),
     goal: (usize, usize),
     epoch: usize,
     radius: usize,
     final_path: Vec<(usize, usize)>,
-    visualiser: Option<Visualiser>,
+    path_store: Box<dyn PathStore<(usize, usize)>>,
 }
 
 impl SampleStar {
 
     /// Creates a new SampleStar algorithm
-    pub fn new(grid: SampleGrid, start: (usize, usize), goal: (usize, usize), epoch:usize, radius: usize) -> Self {
+    pub fn new(
+        grid: SampleGrid,
+        start: (usize, usize), 
+        goal: (usize, usize),
+        epoch:usize,
+        radius: usize,
+        path_store: Box<dyn PathStore<(usize, usize)>>
+    ) -> Self {
         assert!(grid.bound_check(start) && grid.bound_check(goal));
         Self {
             grid,
-            current: start.clone(),
+            previous: start,
+            current: start,
             goal,
             epoch,
             radius,
             final_path: vec![start],
-            visualiser: None,
+            path_store,
         }
     }
 
@@ -45,48 +62,34 @@ impl SampleStar {
         if self.current == self.goal {
             return true;
         }
-        let mut heatmap = HashMap::new();
+        self.path_store.reinitialize();
         // let mut cached_paths = HashMap::new();
         self.grid.update_node_kern(self.current, self.radius);
         // self.grid.init_gridmap_radius(self.current, self.radius + 1); // +1 to account for previous update
         self.grid.init_gridmap_nearest();
-        for _ in 0..self.epoch {
+        for _ in 0..self.epoch { // .min(1 << (self.radius * self.radius)) could be further optimised
             // self.grid.sample_all();
             self.grid.sample_radius(self.current, self.radius);
-            let path = astar(
+            if let Some((path, _)) = astar(
                 |n| self.grid.gridmap.adjacent1(*n),
                 self.current,
                 |n| *n == self.goal,
                 |n| manhattan_distance(*n, self.goal),
-            );
-            if let Some((path, _)) = path {
-                for node in path {
-                    *heatmap.entry(node).or_insert(0) += 1;
-                }
+            ) {
+                self.path_store.add_path(Box::new(path.into_iter()));
             }
         }
-        let old = self.current;
-        self.current = self.grid.adjacent(self.current, false)
-            .filter(|n| heatmap.contains_key(n))
-            .max_by_key(|n| heatmap[n])
-            .unwrap_or(self.current) // If no path exists stay at node
-            .clone();
+        self.previous = self.current;
+        let adj: Box<dyn Iterator<Item = (usize, usize)>> = Box::new(self.grid.adjacent(self.current, false).collect::<Vec<_>>().into_iter());
+        self.current = self.path_store.next_node(adj).unwrap_or(self.current);
         self.final_path.push(self.current);
 
-        if let Some(visualiser) = &self.visualiser {
-            visualiser.visualise_iteration(&self.grid, self.final_path.len()-1, Some(old), Some(self.current), &heatmap);
-        }
         false
     }
 
-    pub fn add_visualiser(&mut self, file_path: &str) {
-        self.visualiser = Some(Visualiser::new(file_path, &self.grid, Some(self.current), Some(self.goal)));
-    }
 }
 
 /*
-Heuristics could include ones that take into account probability of being an obstacle:
-`self.grid.sample_grid[x][y].state * manhattan_distance(n*, self.goal)`
 */
 
 #[cfg(test)]
@@ -108,15 +111,17 @@ mod tests {
         let goal = (3, 6);
         let mut grid = SampleGrid::new_from_file(file);
         grid.blur_samplegrid(5, 1.0);
-        let mut samplestar = SampleStar::new(grid, start, goal, 10, 2);
-        samplestar.add_visualiser("test");
+        let path_store: Box<dyn PathStore<(usize, usize)>> = Box::new(AccStore::new());
+        let mut samplestar = SampleStar::new(grid, start, goal, 10, 2, path_store);
+        let visualiser = Visualiser::new("test", &samplestar.grid, Some(start), Some(goal));
 
-        for _ in 0..100 {
+        for i in 1..=100 {
             if samplestar.step() {
                 break;
             }
+            visualiser.visualise_iteration(&samplestar.grid, i, Some(samplestar.previous.clone()), Some(samplestar.current.clone()), samplestar.path_store.get_paths());
         }
-        samplestar.visualiser.as_ref().unwrap().visualise_final_path(&samplestar.final_path);
+        visualiser.visualise_final_path(&samplestar.final_path);
         assert!(false);
         // assert_eq!(samplestar.final_path.len(), 100);
     }
