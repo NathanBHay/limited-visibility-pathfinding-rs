@@ -72,7 +72,7 @@ impl Visualiser {
             *paths.entry(*node).or_insert(0) += 1;
         }
         let sample_grid = json!({
-            "paths": hashmap_to_adjlist(&paths).iter().collect::<Vec<_>>(),
+            "path": hashmap_to_adjlist(&paths).iter().collect::<Vec<_>>(),
         });
         let mut file = File::create(format!("{}_final_path.json", self.file_path)).unwrap();
         serde_json::to_writer_pretty(&mut file, &sample_grid).unwrap();

@@ -1,34 +1,91 @@
 //! Matrix utilities.
 
-use std::ops::{Add, Mul};
+use std::ops::{Add, Mul, Index, IndexMut};
+
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub struct Matrix<T> {
+    pub data: Box<[T]>,
+    pub width: usize,
+    pub height: usize,
+}
+
+#[macro_export]
+#[allow(unused_assignments)]
+macro_rules! matrix {
+    ( $([$($x:expr),* $(,)?]),* $(,)?) => {
+        {
+            let mut data = Vec::new();
+            let mut height = 0;
+            let mut width = 0;
+            $(
+                height += 1;
+                let row = [$($x),*];
+                width = width.max(row.len());
+                data.extend_from_slice(&row);
+            )*
+            Matrix {
+                data: data.into_boxed_slice(),
+                width,
+                height,
+            }
+        }
+    };
+    ($x: expr; $s: expr) => {
+        Matrix {
+            data: vec![$x; $s * $s].into_boxed_slice(),
+            width: $s,
+            height: $s,
+        }
+    };
+    ($x:expr; $w:expr, $h:expr) => {
+        Matrix {
+            data: vec![$x; $w * $h].into_boxed_slice(),
+            width: $w,
+            height: $h,
+        }
+    };
+}
+
+impl<T> Index<usize> for Matrix<T> {
+    type Output = [T];
+    fn index(&self, row: usize) -> &Self::Output {
+        &self.data[row * self.width..(row + 1) * self.width]
+    }
+}
+
+impl<T> IndexMut<usize> for Matrix<T> {
+    fn index_mut(&mut self, row: usize) -> &mut Self::Output {
+        &mut self.data[row * self.width..(row + 1) * self.width]
+    }
+}
 
 /// Convolve a matrix with a kernel.
 /// * `matrix` - The matrix to convolve.
 /// * `kernel` - The kernel to convolve with.
 /// * `resolution` - The resolution to use when resolving the matrix at the edges.
 pub fn convolve2d<T, K>(
-    matrix: &Vec<Vec<T>>,
-    kernel: &Vec<Vec<K>>,
+    matrix: &Matrix<T>,
+    kernel: &Matrix<K>,
     resolution: ConvResolve<T>
-) -> Vec<Vec<T>> 
+) -> Matrix<T> 
 where 
     T: Clone + Default + Add<Output = T> + Mul<K, Output = T>,
     K: Clone,
 {
-    let mut result = vec![vec![T::default(); matrix[0].len()]; matrix.len()];
-    let kernel_center_x = kernel.len() / 2;
-    let kernel_center_y = kernel[0].len() / 2;
-    for x in 0..matrix.len() {
-        for y in 0..matrix[0].len() {
+    let mut result = matrix![T::default(); matrix.width, matrix.height];
+    let kernel_center_x = kernel.width / 2;
+    let kernel_center_y = kernel.height / 2;
+    for x in 0..matrix.width {
+        for y in 0..matrix.height {
             let mut sum = T::default();
-            for i in 0..kernel.len() {
-                for j in 0..kernel[0].len() {
+            for i in 0..kernel.width {
+                for j in 0..kernel.height {
                     let matrix_x = (x + i) as i64 - kernel_center_x as i64;
                     let matrix_y = (y + j) as i64 - kernel_center_y as i64;
                     sum = sum + resolution.resolve(matrix, matrix_x, matrix_y) * kernel[i][j].clone();
                 }
             }
-            result[x][y] = sum;
+            result[y][x] = sum;
         }
     }
     result
@@ -48,40 +105,40 @@ pub enum ConvResolve<T: Clone> {
 
 impl<T: Clone> ConvResolve<T> {
     /// Resolve the value of a matrix at a given position.
-    fn resolve(&self, matrix: &Vec<Vec<T>>, matrix_x: i64, matrix_y: i64) -> T {
+    fn resolve(&self, matrix: &Matrix<T>, matrix_x: i64, matrix_y: i64) -> T {
         let (matrix_x, matrix_y) = match self {
             ConvResolve::Fill(fill) => 
-                if matrix_x >= 0 && matrix_y >= 0 && matrix_x < matrix.len() as i64 && matrix_y < matrix[0].len() as i64 {
+                if matrix_x >= 0 && matrix_y >= 0 && matrix_x < matrix.width as i64 && matrix_y < matrix.height as i64 {
                     (matrix_x, matrix_y)
                 } else {
                     return fill.clone()
                 },
             ConvResolve::Wrap => (
-                (matrix_x + matrix.len() as i64) % matrix.len() as i64,
-                (matrix_y + matrix[0].len() as i64) % matrix[0].len() as i64
+                (matrix_x + matrix.width as i64) % matrix.width as i64,
+                (matrix_y + matrix.height as i64) % matrix.height as i64
             ), 
             ConvResolve::Nearest => (
-                matrix_x.clamp(0, matrix.len() as i64 - 1),
-                matrix_y.clamp(0, matrix[0].len() as i64 - 1)
+                matrix_x.clamp(0, matrix.width as i64 - 1),
+                matrix_y.clamp(0, matrix.height as i64 - 1)
             ),
             ConvResolve::Reflect => (
                 if matrix_x < 0 {
                     matrix_x.abs() - 1 
-                } else if matrix_x >= matrix.len() as i64 {
-                    matrix_x - matrix.len() as i64 + 1
+                } else if matrix_x >= matrix.width as i64 {
+                    matrix_x - matrix.width as i64 + 1
                 }else {
                     matrix_x
                 },
                 if matrix_y < 0 {
                     matrix_y.abs() - 1 
-                } else if matrix_y >= matrix[0].len() as i64 {
-                    matrix_y - matrix[0].len() as i64 + 1
+                } else if matrix_y >= matrix.height as i64 {
+                    matrix_y - matrix.height as i64 + 1
                 } else { 
                     matrix_y
                 },
             ),
         };
-        matrix[matrix_x as usize][matrix_y as usize].clone()
+        matrix[matrix_y as usize][matrix_x as usize].clone()
     }
 }
 
@@ -108,8 +165,8 @@ pub fn matrix_overlay(
 /// Create a gaussian kernel.
 /// * `size` - The size of the kernel.
 /// * `sigma` - The sigma value of the gaussian.
-pub fn gaussian_kernal(size: usize, sigma: f32) -> Vec<Vec<f32>> {
-    let mut kernel = vec![vec![0.0; size]; size];
+pub fn gaussian_kernal(size: usize, sigma: f32) -> Matrix<f32> {
+    let mut kernel = matrix![0.0; size];
     let center = size / 2;
     let sigma = sigma * sigma;
     let mut sum = 0.0;
@@ -134,102 +191,141 @@ pub fn gaussian_kernal(size: usize, sigma: f32) -> Vec<Vec<f32>> {
 mod tests {
     use super::*;
 
-    fn ones(n: usize) -> Vec<Vec<i32>> {
-        vec![vec![1; n]; n]
+    /// Create a matrix that count up from 1 to n * m.
+    fn count(n: usize, m: usize) -> Matrix<i32> {
+        let mut matrix = matrix![0; m, n];
+        for i in 0..n {
+            for j in 0..m {
+                matrix[i][j] = (i * m + j + 1) as i32;
+            }
+        }
+        matrix
     }
 
-    fn count(n: usize, m: usize) -> Vec<Vec<i32>> {
-        (1..=n).map(|i| (1..=m).map(|j| ((i - 1) * n + j) as i32).collect()).collect()
+    #[test]
+    fn test_macro() {
+        let matrix = matrix![
+            [1, 2, 3],
+            [4, 5, 6],
+        ];
+        assert_eq!(matrix.width, 3);
+        assert_eq!(matrix.height, 2);
+        assert_eq!(matrix.data, vec![1, 2, 3, 4, 5, 6].into_boxed_slice());
+    }
+
+    #[test]
+    fn test_matrix_access() {
+        let matrix = Matrix {
+            width: 3, 
+            height: 3, 
+            data: vec![1, 2, 3, 4, 5, 6, 7, 8, 9].into_boxed_slice(),
+        };
+        for i in 0..3 {
+            for j in 0..3 {
+                assert_eq!(matrix[i][j], (i * 3 + j + 1) as i32);
+            }
+        }
+    }
+
+    #[test]
+    fn test_convolve2d() {
+        let matrix = count(2, 3);
+        let kernel = matrix![1; 3];
+        let result = convolve2d(&matrix, &kernel, ConvResolve::Nearest);
+        assert_eq!(result, matrix![ 
+            [21, 27, 33], 
+            [30, 36, 42]
+        ]);
     }
 
     #[test]
     fn test_convolve2d_fill() {
         let matrix = count(3, 3);
-        let kernel = ones(3);
+        let kernel = matrix![1; 3];
         let result = convolve2d(&matrix, &kernel, ConvResolve::Fill(0));
-        assert_eq!(result, vec![
-            vec![12, 21, 16],
-            vec![27, 45, 33],
-            vec![24, 39, 28],
+        assert_eq!(result, matrix![
+            [12, 21, 16],
+            [27, 45, 33],
+            [24, 39, 28],
         ]);
     }
 
     #[test]
     fn test_convolve2d_wrap() {
         let matrix = count(2, 2);
-        let kernel = ones(2);
+        let kernel = matrix![1; 2];
         let result = convolve2d(&matrix, &kernel, ConvResolve::Wrap);
-        assert_eq!(result, vec![
-            vec![10, 10],
-            vec![10, 10],
+        assert_eq!(result, matrix![
+            [10, 10],
+            [10, 10],
         ]);
     }
 
     #[test]
     fn test_convolve_reflect() {
         let matrix = count(3, 3);
-        let kernel = ones(3);
+        let kernel = matrix![1; 3];
         let result = convolve2d(&matrix, &kernel, ConvResolve::Reflect);
-        assert_eq!(result, vec![
-            vec![21, 27, 30],
-            vec![39, 45, 48],
-            vec![48, 54, 57],
+        assert_eq!(result, matrix![
+            [21, 27, 30],
+            [39, 45, 48],
+            [48, 54, 57],
         ]);
     }
 
     #[test]
     fn test_convolve2d_nearest() {
         let matrix = count(3, 3);
-        let kernel = ones(3);
+        let kernel = matrix![1; 3];
         let result = convolve2d(&matrix, &kernel, ConvResolve::Nearest);
-        assert_eq!(result, vec![
-            vec![21, 27, 33],
-            vec![39, 45, 51],
-            vec![57, 63, 69],
+        assert_eq!(result, matrix![
+            [21, 27, 33],
+            [39, 45, 51],
+            [57, 63, 69],
         ]);
     }
 
     #[test]
     fn test_matrix2d_combine() {
         let mut matrix = count(3, 3);
-        let kernel = ones(5);
-        for ((x, y), (i, j)) in matrix_overlay((matrix.len(), matrix[0].len()), (kernel.len(), kernel[0].len()), (1, 1)) {
+        let kernel = matrix![1; 5];
+        for ((x, y), (i, j)) in matrix_overlay((matrix.width, matrix.height), (kernel.width, kernel.height), (1, 1)) {
             matrix[x][y] += kernel[i][j];
         }
-        assert_eq!(matrix, vec![
-            vec![2, 3, 4],
-            vec![5, 6, 7],
-            vec![8, 9, 10],
+        assert_eq!(matrix, matrix![
+            [2, 3, 4],
+            [5, 6, 7],
+            [8, 9, 10],
         ]);
     }
 
     #[test]
     fn test_gaussian_kernal() {
         let kernel = gaussian_kernal(3, 1.0);
-        assert_eq!(kernel, vec![
-            vec![0.07511361, 0.12384141, 0.07511361],
-            vec![0.12384141, 0.20417996, 0.12384141],
-            vec![0.07511361, 0.12384141, 0.07511361],
+        assert_eq!(kernel, matrix![
+            [0.07511361, 0.12384141, 0.07511361],
+            [0.12384141, 0.20417996, 0.12384141],
+            [0.07511361, 0.12384141, 0.07511361],
         ]);
     }
 
     #[test]
     fn test_convolve2d_gauss() {
-        let matrix = vec![
-            vec![0.0, 1.0, 1.0, 1.0, 1.0],
-            vec![0.0, 0.0, 1.0, 1.0, 1.0],
-            vec![0.0, 0.0, 0.0, 1.0, 1.0],
-            vec![0.0, 0.0, 0.0, 1.0, 1.0],
-            vec![0.0, 0.0, 1.0, 1.0, 1.0],
+        let matrix = matrix![
+            [0.0, 1.0, 1.0, 1.0, 1.0],
+            [0.0, 0.0, 1.0, 1.0, 1.0],
+            [0.0, 0.0, 0.0, 1.0, 1.0],
+            [0.0, 0.0, 0.0, 1.0, 1.0],
+            [0.0, 0.0, 1.0, 1.0, 1.0],
         ];
         let kernel = gaussian_kernal(3, 1.0);
         let result = convolve2d(&matrix, &kernel, ConvResolve::Nearest);
-        assert_eq!(result, vec![
-            vec![0.19895503, 0.60209, 0.9248864, 1.0, 1.0], 
-            vec![0.07511361, 0.32279643, 0.6772036, 0.9248864, 1.0],
-            vec![0.0, 0.07511361, 0.39791006, 0.801045, 1.0],
-            vec![0.0, 0.07511361, 0.39791006, 0.801045, 1.0],
-            vec![0.0, 0.19895503, 0.60209, 0.9248864, 1.0],
+        assert_eq!(result, matrix![
+            [0.19895503, 0.60209, 0.9248864, 1.0, 1.0], 
+            [0.07511361, 0.32279643, 0.6772036, 0.9248864, 1.0],
+            [0.0, 0.07511361, 0.39791006, 0.801045, 1.0],
+            [0.0, 0.07511361, 0.39791006, 0.801045, 1.0],
+            [0.0, 0.19895503, 0.60209, 0.9248864, 1.0],
         ]);
     }
 }

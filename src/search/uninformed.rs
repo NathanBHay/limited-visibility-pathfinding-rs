@@ -7,6 +7,7 @@ use std::{collections::{HashMap, VecDeque}, hash::Hash};
 
 use super::reconstruct_path;
 
+/// Breadth-First Search Algorithm
 pub fn bfs<E, I, N, G>(mut expander: E, start: N, goal: G) -> Option<(Vec<N>, usize)>
 where
     E: FnMut(&N) -> I,
@@ -34,6 +35,7 @@ where
     None
 }
 
+/// Iterative Depth-First Search Algorithm
 pub fn dfs<E, I, N, G>(mut expander: E, start: N, goal: G) -> Option<(Vec<N>, usize)>
 where
     E: FnMut(&N) -> I,
@@ -64,7 +66,7 @@ where
 #[cfg(test)]
 mod tests {
 
-    use crate::search::uninformed::bfs;
+    use crate::search::uninformed::{bfs, dfs};
 
     #[test]
     fn test_bfs() {
@@ -73,8 +75,8 @@ mod tests {
     }
 
     #[test]
-    fn test_bfs_no_result() {
-        let results = bfs(|x| vec![x + 1, x + 2], 0, |x| *x == 3);
-        assert_eq!(results, None);
+    fn test_dfs() {
+        let results = dfs(|x| vec![x + 1, x + 2], 0, |x| *x == 2);
+        assert_eq!(results.unwrap().0, vec![0, 2]);
     }
 }

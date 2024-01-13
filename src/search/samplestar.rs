@@ -7,12 +7,12 @@
 //! Heuristics could include ones that take into account probability of being an obstacle:
 //! `self.grid.sample_grid[x][y].state * manhattan_distance(n*, self.goal)`
 
-
-use std::collections::HashMap;
-
 use crate::{domains::samplegrid::SampleGrid, heuristics::distance::manhattan_distance, util::visualiser::Visualiser, search::pathstore::AccStore};
 
 use super::{astar::astar, pathstore::PathStore};
+
+type SampleStratT = Box<dyn FnMut(&mut SampleGrid, (usize, usize), usize)>;
+type PathStoreT = Box<dyn PathStore<(usize, usize), usize>>;
 
 /// Sample Star Algorithm
 /// ## Arguments
@@ -21,8 +21,7 @@ use super::{astar::astar, pathstore::PathStore};
 /// * `goal` - The goal node.
 /// * `epoch` - The number of times to sample each node.
 /// * `radius` - The radius to sample around each node.
-pub struct SampleStar
-{
+pub struct SampleStar {
     grid:  SampleGrid,
     previous: (usize, usize),
     current: (usize, usize),
@@ -30,7 +29,8 @@ pub struct SampleStar
     epoch: usize,
     radius: usize,
     final_path: Vec<(usize, usize)>,
-    path_store: Box<dyn PathStore<(usize, usize)>>,
+    path_store: PathStoreT,
+    sample_stategy: SampleStratT,
 }
 
 impl SampleStar {
@@ -42,7 +42,8 @@ impl SampleStar {
         goal: (usize, usize),
         epoch:usize,
         radius: usize,
-        path_store: Box<dyn PathStore<(usize, usize)>>
+        path_store: PathStoreT,
+        sample_stategy: SampleStratT,
     ) -> Self {
         assert!(grid.bound_check(start) && grid.bound_check(goal));
         Self {
@@ -54,6 +55,7 @@ impl SampleStar {
             radius,
             final_path: vec![start],
             path_store,
+            sample_stategy,
         }
     }
 
@@ -65,38 +67,37 @@ impl SampleStar {
         self.path_store.reinitialize();
         // let mut cached_paths = HashMap::new();
         self.grid.update_node_kern(self.current, self.radius);
-        // self.grid.init_gridmap_radius(self.current, self.radius + 1); // +1 to account for previous update
-        self.grid.init_gridmap_nearest();
+        self.grid.init_gridmap_nearest(); // Currently more accurate than other methods
         for _ in 0..self.epoch { // .min(1 << (self.radius * self.radius)) could be further optimised
-            // self.grid.sample_all();
-            self.grid.sample_radius(self.current, self.radius);
-            if let Some((path, _)) = astar(
+            (self.sample_stategy)(&mut self.grid, self.current, self.radius);
+            if let Some((path, weight)) = astar(
                 |n| self.grid.gridmap.adjacent1(*n),
                 self.current,
                 |n| *n == self.goal,
                 |n| manhattan_distance(*n, self.goal),
             ) {
-                self.path_store.add_path(Box::new(path.into_iter()));
+                self.path_store.add_path(Box::new(path.into_iter()), weight);
             }
         }
         self.previous = self.current;
         let adj: Box<dyn Iterator<Item = (usize, usize)>> = Box::new(self.grid.adjacent(self.current, false).collect::<Vec<_>>().into_iter());
         self.current = self.path_store.next_node(adj).unwrap_or(self.current);
         self.final_path.push(self.current);
-
         false
     }
 
 }
 
 /*
+Premade Sample Strategies
+|grid, _, _| grid.sample_all()
+|grid, current, radius| grid.sample_radius(current, radius)
 */
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
-    
+    use super::*;
 
     #[test]
     fn test_samplestar() {
@@ -111,8 +112,9 @@ mod tests {
         let goal = (3, 6);
         let mut grid = SampleGrid::new_from_file(file);
         grid.blur_samplegrid(5, 1.0);
-        let path_store: Box<dyn PathStore<(usize, usize)>> = Box::new(AccStore::new());
-        let mut samplestar = SampleStar::new(grid, start, goal, 10, 2, path_store);
+        let path_store: PathStoreT = Box::new(AccStore::new_count_store());
+        let sample_strat: SampleStratT = Box::new(|grid: &mut SampleGrid, current: (usize, usize), radius: usize| grid.sample_radius(current, radius));
+        let mut samplestar = SampleStar::new(grid, start, goal, 10, 2, path_store, sample_strat);
         let visualiser = Visualiser::new("test", &samplestar.grid, Some(start), Some(goal));
 
         for i in 1..=100 {
@@ -122,7 +124,5 @@ mod tests {
             visualiser.visualise_iteration(&samplestar.grid, i, Some(samplestar.previous.clone()), Some(samplestar.current.clone()), samplestar.path_store.get_paths());
         }
         visualiser.visualise_final_path(&samplestar.final_path);
-        assert!(false);
-        // assert_eq!(samplestar.final_path.len(), 100);
     }
 }

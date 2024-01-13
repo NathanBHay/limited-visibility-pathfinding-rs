@@ -16,7 +16,7 @@ class Visualiser:
         self.goal = None
 
     def visualise_start_end(self):
-        with open(f'{self.file_name}_ground_truth') as f:
+        with open(f'{self.file_name}_ground_truth.json') as f:
             ground_truth = json_load(f)
             if start := ground_truth['start']:
                 self.ax.scatter(start[0], start[1], color=viridis1, s=200)
@@ -51,8 +51,11 @@ class Visualiser:
                 for p in path[1]:
                     self.ax.plot([path[0][0], p[0][0]], [path[0][1], p[0][1]], c=viridis(p[1]), linewidth=4)
 
+            if self.goal:
+                self.ax.scatter(self.goal[0], self.goal[1], color=viridis1, s=200, marker='s')
+
             if current := sample_grid_obj['current']:
-                self.ax.scatter(current[0], current[1], color=viridis1, s=200)                
+                self.ax.scatter(current[0], current[1], color=viridis1, s=200)
 
             if next := sample_grid_obj['next']:
                 marker = '*'
@@ -84,9 +87,11 @@ class Visualiser:
         plt.savefig(f'{self.file_name}_ground_truth.png')
         self.ax.cla()
         for i in range(1, limit+1):
-            self.visualise_ground_truth()
-            self.visualise_sample_grid(i)
-            plt.savefig(f'{self.file_name}_step_{i}.png')
+            try:
+                self.visualise_ground_truth()
+                self.visualise_sample_grid(i)
+                plt.savefig(f'{self.file_name}_step_{i}.png')
+            except: break
             self.ax.cla()
         self.visualise_ground_truth()
         self.visualise_final_path()
@@ -95,6 +100,7 @@ class Visualiser:
 
 if __name__ == '__main__':
     v = Visualiser('test')
+    v.visualise_all()
     v.visualise_ground_truth()
     v.visualise_sample_grid(1)
     plt.savefig('test.png')

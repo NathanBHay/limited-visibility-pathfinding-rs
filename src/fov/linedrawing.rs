@@ -23,7 +23,7 @@ pub fn basic_line(
         let y = (m * x as f32 + c).round();
         line.push((x as usize, y as usize));
     }
-    if x0 < x1 {
+    if x0 > x1 {
         line.reverse();
     }
     line

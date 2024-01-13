@@ -1,12 +1,13 @@
 use super::bitpackedgrid::BitPackedGrid;
 use super::{create_map_from_string, plot_cells, print_cells};
-use crate::util::matrix::{convolve2d, ConvResolve, gaussian_kernal, matrix_overlay};
+use crate::matrix;
+use crate::util::matrix::{convolve2d, ConvResolve, gaussian_kernal, matrix_overlay, Matrix};
 use crate::util::filter::KalmanNode;
 
 pub struct SampleGrid {
     /// The sampling grid which determines the probability of a cell being occupied.
     /// It has a value between 0.0 and 1.0
-    pub sample_grid: Vec<Vec<KalmanNode>>,
+    pub sample_grid: Matrix<KalmanNode>,
 
     /// The bitpacked grid which represents sampled cells
     /// TODO: This cam be simplified to a smaller sub grid
@@ -22,19 +23,17 @@ pub struct SampleGrid {
 }
 
 impl SampleGrid {
-    /// The default covariance of the Kalman filter
-    const COVARIANCE: f32 = 1.0;
 
     /// Creates a new sampling grid from a sampling grid and a ground truth grid
-    pub fn new_from_grid(grid: Vec<Vec<f32>>, ground_truth: BitPackedGrid) -> Self {
-        let width = grid.len();
-        let height = grid[0].len();
-        let sample_grid = grid.into_iter()
-            .map(|row| row.into_iter().map(|state| KalmanNode {
-                state,
-                covariance: Self::COVARIANCE,
-            }).collect())
-            .collect();
+    pub fn new_from_grid(grid: Matrix<f32>, ground_truth: BitPackedGrid) -> Self {
+        let width = grid.height;
+        let height = grid.width;
+        let mut sample_grid = matrix![KalmanNode::default(); height, width];
+        for y in 0..width {         // Swapped width and height here
+            for x in 0..height {    // to match the matrix indexing
+                sample_grid[x][y].state = grid[x][y];
+            }
+        }
         let mut grid = SampleGrid {
             sample_grid,
             gridmap: BitPackedGrid::new(width, height),
@@ -48,12 +47,9 @@ impl SampleGrid {
 
     /// Creates a new sampling grid with a given size
     pub fn new_with_size(width: usize, height: usize) -> Self {
-        let node = KalmanNode {
-            state: 0.0,
-            covariance: Self::COVARIANCE,
-        };
+        let node = KalmanNode::default();
         SampleGrid {
-            sample_grid: vec![vec![node; height]; width],
+            sample_grid: matrix![node; height, width],
             gridmap: BitPackedGrid::new(width, height),
             ground_truth: BitPackedGrid::new(width, height),
             width,
@@ -183,7 +179,7 @@ impl SampleGrid {
         kernel[radius][radius.saturating_sub(1)] = 0.0; // the center's measurements
         kernel[radius.saturating_add(1)][radius] = 0.0; // are always correct
         kernel[radius][radius.saturating_add(1)] = 0.0;
-        let kernel_size = (kernel.len(), kernel.len());
+        let kernel_size = (kernel.width, kernel.height);
         for (n, (i, j)) in matrix_overlay((self.width, self.height), kernel_size, (x, y)) {
             self.update_node(n, kernel[i][j]);
         }
@@ -210,7 +206,7 @@ impl SampleGrid {
 
 #[cfg(test)]
 mod tests {
-    use crate::domains::bitpackedgrid::BitPackedGrid;
+    use crate::{domains::bitpackedgrid::BitPackedGrid, matrix, util::matrix::Matrix};
 
     use super::SampleGrid;
 
@@ -219,8 +215,18 @@ mod tests {
         let grid = SampleGrid::new_with_size(128, 128);
         assert_eq!(grid.height, 128);
         assert_eq!(grid.width, 128);
-        assert_eq!(grid.sample_grid.len(), 128);
-        assert_eq!(grid.sample_grid[0].len(), 128);
+        assert_eq!(grid.sample_grid.height, 128);
+        assert_eq!(grid.sample_grid.width, 128);
+    }
+
+    #[test]
+    fn test_samplegrid_new_from_grid() {
+        let grid = SampleGrid::new_from_grid(matrix![[0.0, 1.0], [1.0, 0.0]], BitPackedGrid::new(2, 2));
+        assert_eq!(grid.sample_grid[0][0].state, 0.0);
+        assert_eq!(grid.sample_grid[1][0].state, 1.0);
+        assert_eq!(grid.gridmap.get_bit_value((0, 0)), false);
+        assert_eq!(grid.gridmap.get_bit_value((1, 0)), true);
+        assert_eq!(grid.gridmap.get_bit_value((0, 1)), true);
     }
 
     #[test]
@@ -250,22 +256,16 @@ mod tests {
     fn test_blur() {
         let mut grid = SampleGrid::new_from_string("@....\n@@...\n@@@..\n@@@..\n@@...\n".to_string());
         grid.blur_samplegrid(3, 1.0);
-        let grid_sample: Vec<Vec<f32>> = grid.sample_grid
+        let grid_sample: Vec<f32> = grid.sample_grid.data
             .iter()
-            .map(|row| row.iter().map(|node| node.state).collect())
+            .map(|x| x.state)
             .collect();
         assert_eq!(grid_sample, vec![
-            vec![0.19895503, 0.07511361, 0.0, 0.0, 0.0],
-            vec![0.60209, 0.32279643, 0.07511361, 0.07511361, 0.19895503],
-            vec![0.9248864, 0.6772036, 0.39791006, 0.39791006, 0.60209],
-            vec![1.0, 0.9248864, 0.801045, 0.801045, 0.9248864],
-            vec![1.0, 1.0, 1.0, 1.0, 1.0]
+            0.19895503, 0.07511361, 0.0, 0.0, 0.0,
+            0.60209, 0.32279643, 0.07511361, 0.07511361, 0.19895503,
+            0.9248864, 0.6772036, 0.39791006, 0.39791006, 0.60209,
+            1.0, 0.9248864, 0.801045, 0.801045, 0.9248864,
+            1.0, 1.0, 1.0, 1.0, 1.,
         ]);
-        grid.update_node_kern((2, 2), 1);
-        let grid_sample: Vec<Vec<f32>> = grid.sample_grid
-            .iter()
-            .map(|row| row.iter().map(|node| node.state).collect())
-            .collect();
-        println!("{:?}", grid_sample);
     }
 }

@@ -1,4 +1,4 @@
-use std::{ops::Add, collections::{BinaryHeap, HashMap}, hash::Hash, cmp::Ordering, vec};
+use std::{ops::Add, collections::{BinaryHeap, HashMap}, hash::Hash, cmp::Ordering, vec, fmt::Debug};
 use super::SearchNodeState;
 
 /// Reverse the ordering of an option such that `None` is greater than `Some`
@@ -62,8 +62,9 @@ struct DStarLite<E, I, N, C, H, M, J> where
 impl<E, I, N, C, H, M, J> DStarLite<E, I, N, C, H, M, J> where
     E: Fn(&N) -> I,
     I: IntoIterator<Item = (N, C)>,
-    N: Hash + Eq + Clone,
-    C: Ord + Default + Clone + Add<Output = C>,
+    N: Hash + Eq + Clone + Debug,
+    C: Ord + Default + Clone + Add<Output = C> + Debug
+    ,
     H: Fn(&N, &N) -> C,
     M: FnMut(&N) -> J,
     J: IntoIterator<Item = N>,
@@ -100,7 +101,7 @@ impl<E, I, N, C, H, M, J> DStarLite<E, I, N, C, H, M, J> where
     pub fn step(&mut self) -> bool {
         if self.current == self.goal {
             return true;
-        } 
+        }
         // Moves to new start position
         self.current = (self.expander)(&self.current)
             .into_iter()
@@ -150,9 +151,10 @@ impl<E, I, N, C, H, M, J> DStarLite<E, I, N, C, H, M, J> where
     /// Compute the shortest path similar to a*
     fn compute_shortest_dist(&mut self) {
         while let Some(SearchNodeState { node, cost }) = self.queue.pop() {
+            println!("{:?} | {:?}", self.rhs.get(&self.current), self.g_score.get(&self.current));
             if !(cost < self.calculate_key(&self.current)
             || RevSome(self.rhs.get(&self.current)) > RevSome(self.g_score.get(&self.current))) {
-                continue;
+                break;
             }
             let new_cost = self.calculate_key(&node);
             // self.queue.retain(|x| x.node != node);
@@ -248,7 +250,7 @@ mod tests {
             |node1, node2| manhattan_distance(*node1, *node2),
             |_| vec![],
         );
-        dstar.step();
+        assert!(!dstar.step());
         assert_eq!(dstar.path().unwrap().0, vec![(0, 5), (1, 5), (2, 5), (3, 5), (4, 5), (5, 5), (6, 5), (6, 4), (7, 4), (7, 3), (7, 2), (7, 1), (7, 0)]);
     }
 }

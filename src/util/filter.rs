@@ -2,6 +2,8 @@
 
 use std::ops::{Add, Mul};
 
+const DEFAULT_COVARIANCE: f32 = 1.0;
+
 /// A 1-dimensional Kalman filter node
 /// Adapted from kalmanfilter.net/kalman1d_pn.html
 #[derive(Clone, Debug)]
@@ -28,7 +30,7 @@ impl Default for KalmanNode {
     fn default() -> Self {
         Self {
             state: 0.0,
-            covariance: 1.0,
+            covariance: DEFAULT_COVARIANCE,
         }
     }
 }

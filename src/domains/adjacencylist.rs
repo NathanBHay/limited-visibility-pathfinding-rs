@@ -80,6 +80,8 @@ mod tests {
     #[test]
     fn test_graph_add() {
         let mut test = AdjacencyList::new();
+        test.add_node(1);
+        test.add_node(2);
         test.add_edge(1, 2, 1);
         assert_eq!(test[1], vec![(2, 1)]);
     }
@@ -87,10 +89,11 @@ mod tests {
     #[test]
     fn test_graph_remove_node() {
         let mut test = AdjacencyList::new_nodes((0..3).collect());
+        test.add_edge(0, 1, 1);
         test.add_edge(0, 2, 1);
         test.add_edge(1, 2, 1);
         test.remove_node(1);
         assert_eq!(test.len(), 2);
-        assert_eq!(test[0], vec![(1, 1)]);
+        assert_eq!(test[0], vec![(2, 1)]);
     }
 }
