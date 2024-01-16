@@ -1,7 +1,9 @@
 //! Expansion policies that use field of vision to determine which cells to expand into.
 
 use crate::domains::bitpackedgrid::BitPackedGrid;
-use crate::fov::fieldofvision::raycasting_with_dist;
+use crate::domains::samplegrid::SampleGrid;
+use crate::fov::fieldofvision::{raycasting_with_dist, raycast_matrix};
+use crate::util::matrix::gaussian_kernal;
 
 impl BitPackedGrid {
     /// Find the neighbors of a cell that are visible from that cell.
@@ -11,6 +13,21 @@ impl BitPackedGrid {
         visible
     }
 }
+
+impl SampleGrid {
+    pub fn raycast_update(&mut self, (x, y): (usize, usize), radius: usize) -> usize {
+        let mut kernel = gaussian_kernal(radius, 1.0);
+        let visible = raycast_matrix((x, y), radius, |x, y| self.sample_grid[x][y].state > 0.5);
+        for (k, v) in kernel.data.iter_mut().zip(visible.data.iter()) {
+            if *v  {
+                *k = 1.0;
+            }
+        }
+        visible.data.iter().filter(|x| **x).count()
+    }
+
+}
+
 
 // TODO: Reimplement visibility for sample grid where raycast outputs a kernel of:
 // [1, 1, 1]

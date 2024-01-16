@@ -6,6 +6,32 @@
 use std::collections::HashMap;
 
 use super::linedrawing::bresenham;
+use crate::util::matrix::Matrix;
+use crate::matrix;
+
+pub fn raycast_matrix(
+    (x, y): (usize, usize),
+    radius: usize,
+    mut visibility_check: impl FnMut(usize, usize) -> bool,
+) -> Matrix<bool> {
+    let mut visible: Vec<(usize, usize)> = Vec::new();
+    for i in 0..2*radius {
+        let positions = [
+            (x.saturating_sub(radius).saturating_add(i), y.saturating_sub(radius)),
+            (x.saturating_add(radius), y.saturating_sub(radius).saturating_add(i)),
+            (x.saturating_add(radius).saturating_sub(i), y.saturating_add(radius)),
+            (x.saturating_sub(radius), y.saturating_add(radius).saturating_sub(i)),
+        ];
+        for position in positions.iter() {
+            visible.extend(bresenham((x, y), *position, &mut visibility_check).iter());
+        }
+    }
+    let mut visible_matrix = matrix![false; 2*radius+1, 2*radius+1];
+    for (x, y) in visible.iter().map(|(x, y)| (x.saturating_sub(radius), y.saturating_sub(radius))) {
+        visible_matrix[y][x] = true;
+    }
+    visible_matrix
+}
 
 /// Raycasting approach to field of vision
 pub fn raycasting(
@@ -28,26 +54,15 @@ pub fn raycasting_with_dist(
     let mut visible = HashMap::new();
     let visibility_kernal = (0..=radius).map(visibility_func).collect::<Vec<_>>();
     for i in 0..2*radius {
-        visible.extend(bresenham(
-            (x, y), 
-            (x.saturating_sub(radius).saturating_add(i), y.saturating_sub(radius)), 
-            &mut visibility_check
-        ).iter().zip(visibility_kernal.iter()));
-        visible.extend(bresenham(
-            (x, y), 
-            (x.saturating_add(radius), y.saturating_sub(radius).saturating_add(i)), 
-            &mut visibility_check).iter().zip(visibility_kernal.iter())
-        );
-        visible.extend(bresenham(
-            (x, y), 
-            (x.saturating_add(radius).saturating_sub(i) , y.saturating_add(radius)), 
-            &mut visibility_check).iter().zip(visibility_kernal.iter())
-        );
-        visible.extend(bresenham(
-            (x, y), 
-            (x.saturating_sub(radius) , y.saturating_add(radius).saturating_sub(i)), 
-            &mut visibility_check).iter().zip(visibility_kernal.iter())
-        );
+        let positions = [
+            (x.saturating_sub(radius).saturating_add(i), y.saturating_sub(radius)),
+            (x.saturating_add(radius), y.saturating_sub(radius).saturating_add(i)),
+            (x.saturating_add(radius).saturating_sub(i), y.saturating_add(radius)),
+            (x.saturating_sub(radius), y.saturating_add(radius).saturating_sub(i)),
+        ];
+        for position in positions.iter() {
+            visible.extend(bresenham((x, y), *position, &mut visibility_check).iter().zip(visibility_kernal.iter()));
+        }
     }
     visible.into_iter().collect::<Vec<_>>()
 }

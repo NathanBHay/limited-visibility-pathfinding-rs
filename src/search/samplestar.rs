@@ -66,9 +66,9 @@ impl SampleStar {
         }
         self.path_store.reinitialize();
         // let mut cached_paths = HashMap::new();
-        self.grid.update_node_kern(self.current, self.radius);
+        let max_epoch = self.grid.raycast_update(self.current, self.radius);
         self.grid.init_gridmap_nearest(); // Currently more accurate than other methods
-        for _ in 0..self.epoch { // .min(1 << (self.radius * self.radius)) could be further optimised
+        for _ in 0..self.epoch.min(1 << (max_epoch * max_epoch)) {
             (self.sample_stategy)(&mut self.grid, self.current, self.radius);
             if let Some((path, weight)) = astar(
                 |n| self.grid.gridmap.adjacent1(*n),
@@ -80,7 +80,9 @@ impl SampleStar {
             }
         }
         self.previous = self.current;
-        let adj: Box<dyn Iterator<Item = (usize, usize)>> = Box::new(self.grid.adjacent(self.current, false).collect::<Vec<_>>().into_iter());
+        let adj: Box<dyn Iterator<Item = (usize, usize)>> = Box::new(self.grid.adjacent(self.current, false)
+            .collect::<Vec<_>>()
+            .into_iter());
         self.current = self.path_store.next_node(adj).unwrap_or(self.current);
         self.final_path.push(self.current);
         false

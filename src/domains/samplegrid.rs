@@ -171,18 +171,30 @@ impl SampleGrid {
         self.sample_grid[x][y].update(measurement, measurement_covariance);
     }
 
-    /// Updates the kernal based upon a gaussian kernal with a radius.
-    pub fn update_node_kern(&mut self, (x, y): (usize, usize), radius: usize) {
+    /// Creates a kernel for the adjacency of a point. Used to update nodes with
+    /// matrix representing covariance.
+    pub fn adjacency_kernel(&self, (x, y): (usize, usize), radius: usize) -> Matrix<f32> {
         let mut kernel = gaussian_kernal(2*radius+1, 1.0);
         kernel[radius][radius] = 0.0;
         kernel[radius.saturating_sub(1)][radius] = 0.0; // This is to ensure that
         kernel[radius][radius.saturating_sub(1)] = 0.0; // the center's measurements
         kernel[radius.saturating_add(1)][radius] = 0.0; // are always correct
         kernel[radius][radius.saturating_add(1)] = 0.0;
+        kernel
+    }
+
+    /// Updates nodes based upon a kernal
+    fn update_kernel(&mut self, (x, y): (usize, usize), kernel: Matrix<f32>) {
         let kernel_size = (kernel.width, kernel.height);
         for (n, (i, j)) in matrix_overlay((self.width, self.height), kernel_size, (x, y)) {
             self.update_node(n, kernel[i][j]);
         }
+    }
+    
+    /// Updates nodes based upon a radius
+    pub fn update_radius(&mut self, (x, y): (usize, usize), radius: usize) {
+        let kernel = self.adjacency_kernel((x, y), radius);
+        self.update_kernel((x, y), kernel);
     }
 
     /// Checks if within bounds
