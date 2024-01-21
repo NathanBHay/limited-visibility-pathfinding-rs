@@ -1,5 +1,6 @@
 use super::bitpackedgrid::BitPackedGrid;
 use super::{create_map_from_string, plot_cells, print_cells};
+use crate::fov::fieldofvision::raycast_matrix;
 use crate::matrix;
 use crate::util::matrix::{convolve2d, ConvResolve, gaussian_kernal, matrix_overlay, Matrix};
 use crate::util::filter::KalmanNode;
@@ -195,6 +196,18 @@ impl SampleGrid {
     pub fn update_radius(&mut self, (x, y): (usize, usize), radius: usize) {
         let kernel = self.adjacency_kernel((x, y), radius);
         self.update_kernel((x, y), kernel);
+    }
+
+    /// Updates nodes based on visibile nodes
+    pub fn raycast_update(&mut self, (x, y): (usize, usize), radius: usize) -> usize {
+        let mut kernel = gaussian_kernal(radius, 1.0);
+        let visible = raycast_matrix((x, y), radius, |x, y| self.sample_grid[x][y].state > 0.5);
+        for (k, v) in kernel.data.iter_mut().zip(visible.data.iter()) {
+            if *v  {
+                *k = 1.0;
+            }
+        }
+        visible.data.iter().filter(|x| **x).count()
     }
 
     /// Checks if within bounds

@@ -6,6 +6,7 @@ pub mod uninformed;
 pub mod astar;
 pub mod dstarlite;
 pub mod samplestar;
+pub mod focalsearch;
 mod pathstore;
 /// Reconstructs a path from a given node to the start node
 /// ## Arguments
@@ -51,20 +52,20 @@ where
     (path, cost)
 }
 
-/// Search node used in A-Star/D-Star Binary Heap
-#[derive(Clone, Eq, PartialEq, Debug)]
-pub(crate) struct SearchNodeState<N: Eq, C: Ord> {
+/// Search node used in A-Star/Focal/D-Star Binary Heap
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub(crate) struct SearchNode<N: Eq, C: Ord> {
     node: N,
     cost: C,
 }
 
-impl<N: Eq, C: Ord> Ord for SearchNodeState<N, C> {
+impl<N: Eq, C: Ord> Ord for SearchNode<N, C> {
     fn cmp(&self, other: &Self) -> Ordering {
         self.cost.cmp(&other.cost).reverse()
     }
 }
 
-impl<N: Eq, C: Ord> PartialOrd for SearchNodeState<N, C> {
+impl<N: Eq, C: Ord> PartialOrd for SearchNode<N, C> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }

@@ -5,7 +5,7 @@
 //! is not as optimized and lacks choice of a queue.
 
 use std::{hash::Hash, collections::{HashMap, BinaryHeap, HashSet}, ops::Add};
-use super::{reconstruct_path_with_cost, SearchNodeState};
+use super::{reconstruct_path_with_cost, SearchNode};
 
 
 
@@ -49,14 +49,13 @@ where
     G: Fn(&N) -> bool,
     H: Fn(&N) -> C,
 {
-    let mut open = BinaryHeap::new();
-    let mut previous = HashMap::new();
-    previous.insert(start.clone(), (None, C::default()));
-    open.push(SearchNodeState {
+    let mut open = BinaryHeap::from([SearchNode {
         node: start.clone(),
         cost: heuristic(&start),
-    });
-    while let Some(SearchNodeState { node, .. }) = open.pop() {
+    }]);
+    let mut previous = HashMap::new();
+    previous.insert(start.clone(), (None, C::default()));
+    while let Some(SearchNode { node, .. }) = open.pop() {
         if let Some(expanded_nodes) = expanded_nodes.as_mut() {
             expanded_nodes.insert(node.clone());
         }
@@ -67,7 +66,7 @@ where
             let new_cost = previous[&node].1.clone() + cost;
             if !previous.contains_key(&child) || new_cost < previous[&child].1 {
                 previous.insert(child.clone(), (Some(node.clone()), new_cost.clone()));
-                open.push(SearchNodeState {
+                open.push(SearchNode {
                     node: child.clone(),
                     cost: new_cost.clone() + heuristic(&child),
                 });
@@ -79,7 +78,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{SearchNodeState, astar};
+    use super::{SearchNode, astar};
     use crate::domains::bitpackedgrid::BitPackedGrid;
     use std::collections::BinaryHeap;
 
@@ -121,15 +120,15 @@ mod tests {
     #[test]
     fn test_search_node() {
         let mut open = BinaryHeap::new();
-        open.push(SearchNodeState {
+        open.push(SearchNode {
             node: 1,
             cost: 1,
         });
-        open.push(SearchNodeState {
+        open.push(SearchNode {
             node: 0,
             cost: 0,
         });
-        open.push(SearchNodeState {
+        open.push(SearchNode {
             node: 2,
             cost: 2,
         });

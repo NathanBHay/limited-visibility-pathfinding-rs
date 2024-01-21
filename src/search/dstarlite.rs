@@ -1,5 +1,5 @@
 use std::{ops::Add, collections::{BinaryHeap, HashMap}, hash::Hash, cmp::Ordering, vec, fmt::Debug};
-use super::SearchNodeState;
+use super::SearchNode;
 
 /// Reverse the ordering of an option such that `None` is greater than `Some`
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -54,7 +54,7 @@ struct DStarLite<E, I, N, C, H, M, J> where
     /// G values are an estimate of distance to nodes
     g_score: HashMap<N, C>,
     /// The frontier priority queue of nodes to be expanded
-    queue: BinaryHeap<SearchNodeState<N, Option<(C, C)>>>,
+    queue: BinaryHeap<SearchNode<N, Option<(C, C)>>>,
     /// The last node that was mutated
     s_last: N,
 }
@@ -87,7 +87,7 @@ impl<E, I, N, C, H, M, J> DStarLite<E, I, N, C, H, M, J> where
             rhs: HashMap::from([(start.clone(), C::default())]),
             k_m: C::default(),
             g_score: HashMap::new(),
-            queue: BinaryHeap::from(vec![SearchNodeState {
+            queue: BinaryHeap::from([SearchNode {
                 node: goal,
                 cost: Some((start_h, C::default())),
             }]),
@@ -141,7 +141,7 @@ impl<E, I, N, C, H, M, J> DStarLite<E, I, N, C, H, M, J> where
             x.node != node
         });
         if self.g_score.get(&node) != self.rhs.get(&node) {
-            self.queue.push(SearchNodeState {
+            self.queue.push(SearchNode {
                 node: node.clone(),
                 cost: self.calculate_key(&node),
             });
@@ -150,7 +150,7 @@ impl<E, I, N, C, H, M, J> DStarLite<E, I, N, C, H, M, J> where
 
     /// Compute the shortest path similar to a*
     fn compute_shortest_dist(&mut self) {
-        while let Some(SearchNodeState { node, cost }) = self.queue.pop() {
+        while let Some(SearchNode { node, cost }) = self.queue.pop() {
             println!("{:?} | {:?}", self.rhs.get(&self.current), self.g_score.get(&self.current));
             if !(cost < self.calculate_key(&self.current)
             || RevSome(self.rhs.get(&self.current)) > RevSome(self.g_score.get(&self.current))) {
@@ -160,7 +160,7 @@ impl<E, I, N, C, H, M, J> DStarLite<E, I, N, C, H, M, J> where
             // self.queue.retain(|x| x.node != node);
             if cost < new_cost {
                 self.queue.retain(|x| x.node != node); // This might be able to be removed
-                self.queue.push(SearchNodeState {
+                self.queue.push(SearchNode {
                     node: node.clone(),
                     cost: new_cost,
                 });

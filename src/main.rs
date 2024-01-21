@@ -3,7 +3,6 @@ mod heuristics;
 mod search;
 mod util;
 mod fov;
-mod gridpolicies;
 
 fn main() {
 }
