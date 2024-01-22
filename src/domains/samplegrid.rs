@@ -2,7 +2,7 @@ use super::bitpackedgrid::BitPackedGrid;
 use super::{create_map_from_string, plot_cells, print_cells};
 use crate::fov::fieldofvision::raycast_matrix;
 use crate::matrix;
-use crate::util::matrix::{convolve2d, ConvResolve, gaussian_kernal, matrix_overlay, Matrix};
+use crate::util::matrix::{convolve2d, ConvResolve, matrix_overlay, Matrix};
 use crate::util::filter::KalmanNode;
 
 pub struct SampleGrid {
@@ -24,6 +24,7 @@ pub struct SampleGrid {
 }
 
 impl SampleGrid {
+    const NEAREST_THRESHOLD: f32 = 0.5;
 
     /// Creates a new sampling grid from a sampling grid and a ground truth grid
     pub fn new_from_grid(grid: Matrix<f32>, ground_truth: BitPackedGrid) -> Self {
@@ -87,7 +88,7 @@ impl SampleGrid {
     pub fn init_gridmap_nearest(&mut self) {
         for x in 0..self.width {
             for y in 0..self.height {
-                self.gridmap.set_bit_value((x, y), self.sample_grid[x][y].state > 0.5);
+                self.gridmap.set_bit_value((x, y), self.sample_grid[x][y].state > Self::NEAREST_THRESHOLD);
             }
         }
     }
@@ -118,11 +119,10 @@ impl SampleGrid {
 
     /// Blurs the sampling grid with a gaussian kernal.
     /// Note that this operation sets all covariances to 1.0
-    pub fn blur_samplegrid(&mut self, size: usize, sigma: f32) {
-        let kernal = gaussian_kernal(size, sigma);
+    pub fn blur_samplegrid(&mut self, kernel: &Matrix<f32>) {
         self.sample_grid = convolve2d(
             &self.sample_grid,
-            &kernal,
+            kernel,
             ConvResolve::Nearest,
         );
     }
@@ -174,8 +174,9 @@ impl SampleGrid {
 
     /// Creates a kernel for the adjacency of a point. Used to update nodes with
     /// matrix representing covariance.
-    pub fn adjacency_kernel(&self, (x, y): (usize, usize), radius: usize) -> Matrix<f32> {
-        let mut kernel = gaussian_kernal(2*radius+1, 1.0);
+    pub fn adjacency_kernel(&self, kernel: &Matrix<f32>)-> Matrix<f32> {
+        let mut kernel = kernel.clone();
+        let radius = kernel.width / 2;
         kernel[radius][radius] = 0.0;
         kernel[radius.saturating_sub(1)][radius] = 0.0; // This is to ensure that
         kernel[radius][radius.saturating_sub(1)] = 0.0; // the center's measurements
@@ -193,20 +194,24 @@ impl SampleGrid {
     }
     
     /// Updates nodes based upon a radius
-    pub fn update_radius(&mut self, (x, y): (usize, usize), radius: usize) {
-        let kernel = self.adjacency_kernel((x, y), radius);
+    pub fn update_radius(&mut self, (x, y): (usize, usize), kernel: &Matrix<f32>) {
+        let kernel = self.adjacency_kernel(kernel);
         self.update_kernel((x, y), kernel);
     }
 
     /// Updates nodes based on visibile nodes
-    pub fn raycast_update(&mut self, (x, y): (usize, usize), radius: usize) -> usize {
-        let mut kernel = gaussian_kernal(radius, 1.0);
-        let visible = raycast_matrix((x, y), radius, |x, y| self.sample_grid[x][y].state > 0.5);
+    pub fn raycast_update(&mut self, (x, y): (usize, usize), kernel: &Matrix<f32>) -> usize {
+        let mut kernel = self.adjacency_kernel(kernel);
+        
+        let visible = raycast_matrix((x, y), kernel.width / 2, |x, y| {
+            self.sample_grid[x.min(self.width-1)][y.min(self.height-1)].state > Self::NEAREST_THRESHOLD},
+            |x, y| self.bound_check((x, y)));
         for (k, v) in kernel.data.iter_mut().zip(visible.data.iter()) {
             if *v  {
                 *k = 1.0;
             }
         }
+        self.update_kernel((x, y), kernel);
         visible.data.iter().filter(|x| **x).count()
     }
 
@@ -231,7 +236,7 @@ impl SampleGrid {
 
 #[cfg(test)]
 mod tests {
-    use crate::{domains::bitpackedgrid::BitPackedGrid, matrix, util::matrix::Matrix};
+    use crate::{domains::bitpackedgrid::BitPackedGrid, matrix, util::matrix::{Matrix, gaussian_kernal}};
 
     use super::SampleGrid;
 
@@ -280,7 +285,7 @@ mod tests {
     #[test]
     fn test_blur() {
         let mut grid = SampleGrid::new_from_string("@....\n@@...\n@@@..\n@@@..\n@@...\n".to_string());
-        grid.blur_samplegrid(3, 1.0);
+        grid.blur_samplegrid(&gaussian_kernal(3, 1.0));
         let grid_sample: Vec<f32> = grid.sample_grid.data
             .iter()
             .map(|x| x.state)

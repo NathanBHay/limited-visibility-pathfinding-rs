@@ -34,17 +34,18 @@ class Visualiser:
             ground_truth = np.array(ground_truth['grid']).astype(bool).transpose()
             self.ax.imshow(ground_truth, cmap='gray')
 
-    def visualise_sample_grid(self, iteration: int):
+    def visualise_sample_grid(self, iteration: int, labels: bool = True):
         """
         Visualise the file_sample_grid.json file
         """
         self.ax.set_title(f'{self.file_name.capitalize()} Sample Grid')
         with open(f'{self.file_name}_step_{iteration}.json') as f:
             sample_grid_obj = json_load(f)
-            sample_grid = np.array(sample_grid_obj['sample_grid']).astype(float)
-            for i in range(len(sample_grid)):
-                for j in range(len(sample_grid[i])):
-                    self.ax.text(i, j, round(sample_grid[i, j], 3), ha="center", va="center", color=Greys(sample_grid[i, j]))
+            if labels:
+                sample_grid = np.array(sample_grid_obj['sample_grid']).astype(float)
+                for i in range(len(sample_grid)):
+                    for j in range(len(sample_grid[i])):
+                        self.ax.text(i, j, round(sample_grid[i, j], 3), ha="center", va="center", color=Greys(sample_grid[i, j]))
 
             paths = sample_grid_obj['paths']
             for path in paths:
@@ -78,7 +79,7 @@ class Visualiser:
                 for p in path[1]:
                     self.ax.plot([path[0][0], p[0][0]], [path[0][1], p[0][1]], c=viridis(p[1]), linewidth=4)
 
-    def visualise_all(self, limit: int = 1000):
+    def visualise_all(self, labels: bool = True, limit: int = 1000):
         """
         Visualise all files
         """
@@ -89,7 +90,7 @@ class Visualiser:
         for i in range(1, limit+1):
             try:
                 self.visualise_ground_truth()
-                self.visualise_sample_grid(i)
+                self.visualise_sample_grid(i, labels)
                 plt.savefig(f'{self.file_name}_step_{i}.png')
             except: break
             self.ax.cla()
@@ -100,7 +101,4 @@ class Visualiser:
 
 if __name__ == '__main__':
     v = Visualiser('test')
-    v.visualise_all()
-    v.visualise_ground_truth()
-    v.visualise_sample_grid(1)
-    plt.savefig('test.png')
+    v.visualise_all(False)

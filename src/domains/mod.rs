@@ -34,7 +34,7 @@ where
     F: FnMut(&mut D, usize, usize) -> (), 
 {
     let s = s.trim();
-    let start = s.find(|c| c == '.' || c == '@');
+    let start = s.find(|c: char| ['.', '@', 'T'].contains(&c));
     let s = match start {
         Some(start) => &s[start..],
         None => "",

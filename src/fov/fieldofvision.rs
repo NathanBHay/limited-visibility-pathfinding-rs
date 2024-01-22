@@ -13,21 +13,24 @@ pub fn raycast_matrix(
     (x, y): (usize, usize),
     radius: usize,
     mut visibility_check: impl FnMut(usize, usize) -> bool,
+    bounds_check: impl Fn(usize, usize) -> bool,
 ) -> Matrix<bool> {
     let mut visible: Vec<(usize, usize)> = Vec::new();
-    for i in 0..2*radius {
-        let positions = [
-            (x.saturating_sub(radius).saturating_add(i), y.saturating_sub(radius)),
-            (x.saturating_add(radius), y.saturating_sub(radius).saturating_add(i)),
-            (x.saturating_add(radius).saturating_sub(i), y.saturating_add(radius)),
-            (x.saturating_sub(radius), y.saturating_add(radius).saturating_sub(i)),
+    let (ix, iy) = (x as i32, y as i32);
+    let r = radius as i32;
+    for i in 0..2*r  {
+        let positions: [(i32, i32); 4] = [
+            (ix - r + i, iy - r),
+            (ix + r, iy - r + i),
+            (ix + r - i, iy + r),
+            (ix - r, iy + r - i),
         ];
-        for position in positions.iter() {
-            visible.extend(bresenham((x, y), *position, &mut visibility_check).iter());
+        for (px, py) in positions.iter().filter(|(x, y)| x >= &0 && y >= &0 && bounds_check(*x as usize, *y as usize)) {
+            visible.extend(bresenham((x, y), (*px as usize, *py as usize), &mut visibility_check).iter());
         }
     }
     let mut visible_matrix = matrix![false; 2*radius+1, 2*radius+1];
-    for (x, y) in visible.iter().map(|(x, y)| (x.saturating_sub(radius), y.saturating_sub(radius))) {
+    for (x, y) in visible.iter().map(|(xi, yi)| (xi + radius - x, yi + radius - y)) {
         visible_matrix[y][x] = true;
     }
     visible_matrix
@@ -160,7 +163,7 @@ fn lightcast(
 #[cfg(test)]
 mod tests {
     
-    use super::{raycasting, shadowcasting};
+    use super::{raycasting, raycast_matrix, shadowcasting};
 
     #[test]
     fn test_raycasting() {
@@ -168,6 +171,14 @@ mod tests {
         assert_eq!(visibility_all.len(), 25);
         let visibility_top_obstacle = raycasting((10, 10), 2, |x, y| (x,y) != (10, 9));
         assert_eq!(visibility_top_obstacle.len(), 21);
+    }
+
+    #[test]
+    fn test_raycast_matrix() {
+        let visibility_all = raycast_matrix((10, 10), 2, |_, _| true, |_, _| true);
+        assert_eq!(visibility_all.data.iter().filter(|x| **x).count(), 25);
+        let visibility_top_obstacle = raycast_matrix((10, 10), 2, |x, y| (x,y) != (10, 9), |_, _| true);
+        assert_eq!(visibility_top_obstacle.data.iter().filter(|x| **x).count(), 21);
     }
 
     #[test]

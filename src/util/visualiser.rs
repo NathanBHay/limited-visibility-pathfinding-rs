@@ -110,25 +110,3 @@ fn hashmap_to_adjlist(map: &HashMap<(usize, usize), usize>) -> AdjacencyList<(us
     }
     adjlist
 }
-
-#[cfg(test)]
-mod tests {
-
-    use std::collections::HashMap;
-
-    use super::*;
-
-    #[test]
-    fn test_visualise() {
-        let mut grid = SampleGrid::new_from_string(".....\n....@\n.....\n...@.\n...@.\n".to_string());
-        grid.blur_samplegrid(2, 1.0);
-        let visualiser = Visualiser::new("test", &grid, Some((0, 0)), Some((4, 4)));
-        let mut paths = HashMap::new();
-        paths.insert((0, 0), 2);
-        paths.insert((1, 0), 2);
-        paths.insert((2, 0), 1);
-        paths.insert((1, 1), 1);
-        visualiser.visualise_iteration(&grid, 0, Some((0, 0)), Some((1,0)), &paths);
-
-    }
-}

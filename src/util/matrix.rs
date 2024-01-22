@@ -1,6 +1,6 @@
 //! Matrix utilities.
 
-use std::ops::{Add, Mul, Index, IndexMut};
+use std::{ops::{Add, Mul, Index, IndexMut}, fmt::{Display, Formatter}};
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Matrix<T> {
@@ -56,6 +56,18 @@ impl<T> Index<usize> for Matrix<T> {
 impl<T> IndexMut<usize> for Matrix<T> {
     fn index_mut(&mut self, row: usize) -> &mut Self::Output {
         &mut self.data[row * self.width..(row + 1) * self.width]
+    }
+}
+
+impl<T: Display> Display for Matrix<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        for row in 0..self.height {
+            for col in 0..self.width {
+                write!(f, "{}, ", self[row][col])?;
+            }
+            writeln!(f, "|")?;
+        }
+        Ok(())
     }
 }
 

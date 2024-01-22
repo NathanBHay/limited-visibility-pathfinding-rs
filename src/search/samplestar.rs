@@ -7,9 +7,9 @@
 //! Heuristics could include ones that take into account probability of being an obstacle:
 //! `self.grid.sample_grid[x][y].state * manhattan_distance(n*, self.goal)`
 
-use crate::{domains::samplegrid::SampleGrid, heuristics::distance::manhattan_distance, util::visualiser::Visualiser, search::pathstore::AccStore};
+use crate::{domains::samplegrid::SampleGrid, heuristics::distance::manhattan_distance, util::{filter::KalmanNode, matrix::Matrix}};
 
-use super::{astar::astar, pathstore::PathStore};
+use super::{pathstore::PathStore, focalsearch::focal_search};
 
 type SampleStratT = Box<dyn FnMut(&mut SampleGrid, (usize, usize), usize)>;
 type PathStoreT = Box<dyn PathStore<(usize, usize), usize>>;
@@ -27,7 +27,7 @@ pub struct SampleStar {
     current: (usize, usize),
     goal: (usize, usize),
     epoch: usize,
-    radius: usize,
+    kernel: Matrix<f32>,
     final_path: Vec<(usize, usize)>,
     path_store: PathStoreT,
     sample_stategy: SampleStratT,
@@ -41,7 +41,7 @@ impl SampleStar {
         start: (usize, usize), 
         goal: (usize, usize),
         epoch:usize,
-        radius: usize,
+        kernel: Matrix<f32>,
         path_store: PathStoreT,
         sample_stategy: SampleStratT,
     ) -> Self {
@@ -52,7 +52,7 @@ impl SampleStar {
             current: start,
             goal,
             epoch,
-            radius,
+            kernel,
             final_path: vec![start],
             path_store,
             sample_stategy,
@@ -66,15 +66,17 @@ impl SampleStar {
         }
         self.path_store.reinitialize();
         // let mut cached_paths = HashMap::new();
-        let max_epoch = self.grid.raycast_update(self.current, self.radius);
+        self.grid.raycast_update(self.current, &self.kernel);
         self.grid.init_gridmap_nearest(); // Currently more accurate than other methods
-        for _ in 0..self.epoch.min(1 << (max_epoch * max_epoch)) {
-            (self.sample_stategy)(&mut self.grid, self.current, self.radius);
-            if let Some((path, weight)) = astar(
+        for _ in 0..self.epoch {
+            (self.sample_stategy)(&mut self.grid, self.current, self.kernel.width / 2);
+            if let Some((path, weight)) = focal_search(
                 |n| self.grid.gridmap.adjacent1(*n),
                 self.current,
                 |n| *n == self.goal,
                 |n| manhattan_distance(*n, self.goal),
+                |n| manhattan_distance(*n, self.goal),
+                |n| *n,
             ) {
                 self.path_store.add_path(Box::new(path.into_iter()), weight);
             }
@@ -88,6 +90,23 @@ impl SampleStar {
         false
     }
 
+    /// Calculate the number of samples needed to achieve a confidence interval
+    /// of Z and a margin of error of MARGIN_OF_ERROR. This possibly results
+    /// in less samples than the statistical epoch.
+    fn statistical_epoch(&self, sampling_states: Vec<KalmanNode>) -> usize {
+        let (s, c) = sampling_states.iter()
+            .map(|n| n.state)
+            .filter(|n| n != &0.0 || n != &1.0)
+            .fold((0.0, 0), |(s, c), x| (s + x, c + 1));
+        let p: f32 = s / c as f32;
+        (Self::DESIGN_EFFECT * p * (1.0 - p)) as usize
+    }
+
+    // Constant values for statistical epoch    
+    const Z : f32 = 1.96;
+    const MARGIN_OF_ERROR : f32 = 0.05;
+    const D : f32 = Self::Z / Self::MARGIN_OF_ERROR;
+    const DESIGN_EFFECT : f32 = Self::D * Self::D;
 }
 
 /*
@@ -100,26 +119,20 @@ Premade Sample Strategies
 mod tests {
 
     use super::*;
-
+    use std::collections::HashMap;
+    use crate::{util::{visualiser::Visualiser, matrix::gaussian_kernal}, search::pathstore::AccStore,};
+    
     #[test]
     fn test_samplestar() {
-        // let file = "tests/basic.map";
-        // let start = (1, 1);
-        // let goal = (30, 30);
-        // let file = "tests/map.map";
-        // let start = (225, 225);
-        // let goal = (70, 40);
-        let file = "tests/wall/wall.map";
-        let start = (3, 1);
-        let goal = (3, 6);
+        let (file, start, goal) = maps::BASIC;
         let mut grid = SampleGrid::new_from_file(file);
-        grid.blur_samplegrid(5, 1.0);
+        grid.blur_samplegrid(&gaussian_kernal(5, 1.0));
         let path_store: PathStoreT = Box::new(AccStore::new_count_store());
         let sample_strat: SampleStratT = Box::new(|grid: &mut SampleGrid, current: (usize, usize), radius: usize| grid.sample_radius(current, radius));
-        let mut samplestar = SampleStar::new(grid, start, goal, 10, 2, path_store, sample_strat);
+        let mut samplestar = SampleStar::new(grid, start, goal, 10, gaussian_kernal(5, 1.0), path_store, sample_strat);
         let visualiser = Visualiser::new("test", &samplestar.grid, Some(start), Some(goal));
 
-        for i in 1..=100 {
+        for i in 1..=10000 {
             if samplestar.step() {
                 break;
             }
@@ -127,4 +140,21 @@ mod tests {
         }
         visualiser.visualise_final_path(&samplestar.final_path);
     }
+}
+
+mod maps {
+    type Map = (&'static str, (usize, usize), (usize, usize));
+    pub const BASIC: Map =  ("tests/basic.map", (1, 1), (30, 30));
+    pub const MAP: Map =  ("tests/map.map", (225, 225), (70, 40));
+    pub const WALL: Map =  ("tests/wall/wall.map", (3, 1), (3, 6));
+    pub const CACAVERNS: Map =  ("tests/ca_caverns1.map", (122, 595), (200, 15));
+    pub const DRYWATER: Map =  ("tests/drywatergulch.map", (175, 315), (320, 125));
+    pub const FLOODEDPLAINS: Map =  ("tests/FloodedPlains.map", (160, 100), (480, 330));
+    pub const HRT: Map =  ("tests/hrt201d.map", (70, 28), (250, 235));
+    pub const LAK: Map =  ("tests/lak201d.map", (30, 150), (100, 50));
+    pub const MAZE: Map =  ("tests/maze512-8-4.map", (10, 10), (380, 325));
+    pub const MEDUSA: Map =  ("tests/Medusa.map", (60, 250), (460, 20));
+    pub const SIROCCO: Map =  ("tests/Sirocco.map", (10, 250), (750, 250));
+    pub const TRISKELION: Map =  ("tests/Triskelion.map", (260, 500), (10, 10));
+    pub const WAYPOINTJUNCTION: Map =  ("tests/WaypointJunction.map", (245, 20), (260, 500));
 }
