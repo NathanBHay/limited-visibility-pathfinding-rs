@@ -1,7 +1,5 @@
 //! Distance heuristics used to compute the distance between two points in a grid.
 //! These heuristics are used on grid maps in pathfinding algorithms such as A*.
-//! 
-
 
 pub fn manhattan_distance((x1, y1): (usize, usize), (x2, y2): (usize, usize)) -> usize {
     x1.abs_diff(x2) + y1.abs_diff(y2)

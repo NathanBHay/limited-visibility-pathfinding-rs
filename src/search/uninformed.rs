@@ -3,7 +3,10 @@
 //! * Breadth-First Search
 //! * Depth-First Search
 
-use std::{collections::{HashMap, VecDeque}, hash::Hash};
+use std::{
+    collections::{HashMap, VecDeque},
+    hash::Hash,
+};
 
 use super::reconstruct_path;
 

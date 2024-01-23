@@ -2,17 +2,17 @@
 //! A grid map representation that uses bitpacking to store the map.
 //! This is the fastest grid map implementation, as it uses bit manipulations
 //! to change the map while also being the smallest as it compresses the map
-//! into a bitpacked array. This array is stored as an array of numbers, where 
+//! into a bitpacked array. This array is stored as an array of numbers, where
 //! each binary digit in the number represents a cell in the map. These cells
-//! are additionally padded with 2 rows and columns to avoid travelling out of 
+//! are additionally padded with 2 rows and columns to avoid travelling out of
 //! bounds.
-//! 
+//!
 //! This implementation is based upon Warthog's implementation of bitpacked grid
 //! maps, which can be found: https://bitbucket.org/dharabor/pathfinding/
 
 use std::vec;
 
-use super::{create_map_from_string, print_cells, neighbors, plot_cells};
+use super::{create_map_from_string, neighbors, plot_cells, print_cells};
 
 /// A grid of bits packed into usize-bit words
 #[derive(Debug)]
@@ -55,7 +55,7 @@ impl BitPackedGrid {
     /// * `map` - A string representing the map where . is a free cell
     pub fn new_from_string(map: String) -> BitPackedGrid {
         create_map_from_string(map, BitPackedGrid::new, |grid, x, y| {
-            grid.set_bit_value((x, y), true)  
+            grid.set_bit_value((x, y), true)
         })
     }
 
@@ -113,24 +113,44 @@ impl BitPackedGrid {
 
     /// Prints the grid map where . is a free cell and @ is an obstacle
     pub fn print_cells(&self, path: Option<Vec<(usize, usize)>>) -> String {
-        print_cells(self.original_width, self.original_height, |x, y| {
-            self.get_bit_value((x, y))
-        }, path)
+        print_cells(
+            self.original_width,
+            self.original_height,
+            |x, y| self.get_bit_value((x, y)),
+            path,
+        )
     }
 
     /// Get the neighbors of a given cell
-    pub fn adjacent(&self, (x, y): (usize, usize), diagonal: bool) -> impl Iterator<Item = (usize, usize)> + '_ {
+    pub fn adjacent(
+        &self,
+        (x, y): (usize, usize),
+        diagonal: bool,
+    ) -> impl Iterator<Item = (usize, usize)> + '_ {
         neighbors(x, y, diagonal).filter(move |(x, y)| self.get_bit_value((*x, *y)))
     }
 
-    pub fn adjacent1(&self, (x, y): (usize, usize)) -> impl Iterator<Item = ((usize, usize), usize)> + '_ {
-        self.adjacent((x, y), false).map(|n| (n,1))
+    pub fn adjacent1(
+        &self,
+        (x, y): (usize, usize),
+    ) -> impl Iterator<Item = ((usize, usize), usize)> + '_ {
+        self.adjacent((x, y), false).map(|n| (n, 1))
     }
 
-    pub fn plot_cells(&self, filename: &str, path: Option<Vec<(usize, usize)>>, heatmap: Option<Vec<((usize, usize), f64)>>) {
-        plot_cells(self.original_width, self.original_height, filename, |x, y| {
-            self.get_bit_value((x, y))
-        }, path, heatmap)
+    pub fn plot_cells(
+        &self,
+        filename: &str,
+        path: Option<Vec<(usize, usize)>>,
+        heatmap: Option<Vec<((usize, usize), f64)>>,
+    ) {
+        plot_cells(
+            self.original_width,
+            self.original_height,
+            filename,
+            |x, y| self.get_bit_value((x, y)),
+            path,
+            heatmap,
+        )
     }
 }
 
@@ -172,7 +192,12 @@ mod tests {
 
     #[test]
     fn test_bitpackedgrid_get_neighbours() {
-        let grid = BitPackedGrid::new_from_string(".....\n.@.@.\n.@.@.\n.@.@.\n.....\n....@\n".to_string());
-        assert_eq!(grid.adjacent((0, 0), false).collect::<Vec<_>>(), vec![(1, 0), (0, 1)]);
+        let grid = BitPackedGrid::new_from_string(
+            ".....\n.@.@.\n.@.@.\n.@.@.\n.....\n....@\n".to_string(),
+        );
+        assert_eq!(
+            grid.adjacent((0, 0), false).collect::<Vec<_>>(),
+            vec![(1, 0), (0, 1)]
+        );
     }
 }

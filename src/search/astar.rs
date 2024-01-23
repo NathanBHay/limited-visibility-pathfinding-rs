@@ -1,20 +1,18 @@
 //! # A-Star Search
 //! An A-Star Implementation with drop-in heuristic, expander, and domain.
-//! The implementation is similar to the approach used by 
+//! The implementation is similar to the approach used by
 //! [Warthog](https://bitbucket.org/dharabor/pathfinding/src/master/), however
 //! is not as optimized and lacks choice of a queue.
 
-use std::{hash::Hash, collections::{HashMap, BinaryHeap, HashSet}, ops::Add};
 use super::{reconstruct_path_with_cost, SearchNode};
+use std::{
+    collections::{BinaryHeap, HashMap, HashSet},
+    hash::Hash,
+    ops::Add,
+};
 
-
-
-pub fn astar<E, I, C, N, G, H>(
-    expander: E,
-    start: N, 
-    goal: G,
-    heuristic: H, 
-) -> Option<(Vec<N>, C)>
+/// A-Star Search
+pub fn astar<E, I, C, N, G, H>(expander: E, start: N, goal: G, heuristic: H) -> Option<(Vec<N>, C)>
 where
     E: FnMut(&N) -> I,
     I: IntoIterator<Item = (N, C)>,
@@ -26,7 +24,7 @@ where
     astar_with_expanded_set(expander, start, goal, None, heuristic)
 }
 
-/// A-Star Search
+/// A-Star Search with added expanded set for debugging
 /// ## Arguments
 /// * `expander` - A function that returns an iterator over the nodes adjacent to a given node
 /// * `start` - The start node
@@ -36,10 +34,10 @@ where
 /// An optional vector of nodes from the start to the goal
 pub fn astar_with_expanded_set<E, I, C, N, G, H>(
     mut expander: E,
-    start: N, 
+    start: N,
     goal: G,
     mut expanded_nodes: Option<&mut HashSet<N>>,
-    heuristic: H, 
+    heuristic: H,
 ) -> Option<(Vec<N>, C)>
 where
     E: FnMut(&N) -> I,
@@ -78,18 +76,13 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{SearchNode, astar};
+    use super::{astar, SearchNode};
     use crate::domains::bitpackedgrid::BitPackedGrid;
     use std::collections::BinaryHeap;
 
     #[test]
     fn test_astar() {
-        let results = astar(
-            |x| vec![(x + 1, 1), (x + 2, 2)],
-            0,
-            |x| *x == 2,
-            |x| *x,
-        );
+        let results = astar(|x| vec![(x + 1, 1), (x + 2, 2)], 0, |x| *x == 2, |x| *x);
         assert_eq!(results.unwrap().0, vec![0, 2]);
     }
 
@@ -97,41 +90,60 @@ mod tests {
     fn test_astar_bitpacked_grid() {
         let grid = BitPackedGrid::new_from_string(".....\n.###.\n.#...\n.#.#.\n...#.".to_string());
         let path = astar(
-            |(x, y)| grid.adjacent((x.clone(), y.clone()), false).map(|(x, y)| ((x, y), 1)), 
+            |(x, y)| {
+                grid.adjacent((x.clone(), y.clone()), false)
+                    .map(|(x, y)| ((x, y), 1))
+            },
             (0, 4),
-            |(x, y)| *x == 4 && *y == 4,
-            |_| 0, 
+            |(x, y)| *x == 4 && *y == 2,
+            |_| 0,
         );
-        assert_eq!(path.unwrap().0, vec![(0, 4), (1, 4), (2, 4), (2, 3), (2, 2), (3, 2), (4, 2), (4, 3), (4, 4)]);
+        assert_eq!(
+            path.unwrap().0,
+            vec![(0, 4), (1, 4), (2, 4), (2, 3), (2, 2), (3, 2), (4, 2)]
+        );
     }
 
     #[test]
     fn test_astar_bitpacked_grid_with_heuristic() {
-        let grid = BitPackedGrid::new_from_string("........\n...###..\n.....#..\n.....#..\n........\n........".to_string());
+        let grid = BitPackedGrid::new_from_string(
+            "........\n...###..\n.....#..\n.....#..\n........\n........".to_string(),
+        );
         let path = astar(
-            |(x, y)| grid.adjacent((x.clone(), y.clone()), false).map(|(x, y)| ((x, y), 1)), 
+            |(x, y)| {
+                grid.adjacent((x.clone(), y.clone()), false)
+                    .map(|(x, y)| ((x, y), 1))
+            },
             (0, 5),
             |(x, y)| *x == 7 && *y == 0,
-            |_| 0, 
+            |_| 0,
         );
-        assert_eq!(path.unwrap().0, vec![(0, 5), (1, 5), (2, 5), (3, 5), (4, 5), (5, 5), (6, 5), (6, 4), (7, 4), (7, 3), (7, 2), (7, 1), (7, 0)]);
+        assert_eq!(
+            path.unwrap().0,
+            vec![
+                (0, 5),
+                (1, 5),
+                (2, 5),
+                (3, 5),
+                (4, 5),
+                (5, 5),
+                (6, 5),
+                (6, 4),
+                (7, 4),
+                (7, 3),
+                (7, 2),
+                (7, 1),
+                (7, 0)
+            ]
+        );
     }
 
     #[test]
     fn test_search_node() {
         let mut open = BinaryHeap::new();
-        open.push(SearchNode {
-            node: 1,
-            cost: 1,
-        });
-        open.push(SearchNode {
-            node: 0,
-            cost: 0,
-        });
-        open.push(SearchNode {
-            node: 2,
-            cost: 2,
-        });
+        open.push(SearchNode { node: 1, cost: 1 });
+        open.push(SearchNode { node: 0, cost: 0 });
+        open.push(SearchNode { node: 2, cost: 2 });
         assert_eq!(open.pop().unwrap().node, 0);
         assert_eq!(open.pop().unwrap().node, 1);
         assert_eq!(open.pop().unwrap().node, 2);

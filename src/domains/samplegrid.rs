@@ -93,6 +93,7 @@ impl SampleGrid {
         }
     }
 
+    /// Initializes the gridmap from the sampling grid using the `NEAREST_THRESHOLD``
     pub fn init_gridmap_nearest(&mut self) {
         for x in 0..self.width {
             for y in 0..self.height {
@@ -255,22 +256,21 @@ impl SampleGrid {
         super::neighbors(x, y, diagonal).filter(|(x, y)| self.bound_check((*x, *y)))
     }
 
+    /// Samples all adjacent cells on sampling grid
     pub fn sample_adjacenct(
         &mut self,
         (x, y): (usize, usize),
     ) -> impl Iterator<Item = (usize, usize)> + '_ {
-        super::neighbors(x, y, false)
-            .filter(move |(x, y)| {
-                if self.bound_check((x, y)) && !self.sampled_before.get_bit_value((*x, *y)) {
-                    self.sample((*x, *y))
-                } else {
-                    self.gridmap.get_bit_value((*x, *y))
-                }
-            })
-            .collect::<Vec<_>>()
-            .into_iter()
+        super::neighbors(x, y, false).filter(move |(x, y)| {
+            if self.bound_check((*x, *y)) && !self.sampled_before.get_bit_value((*x, *y)) {
+                self.sample((*x, *y))
+            } else {
+                self.gridmap.get_bit_value((*x, *y))
+            }
+        })
     }
 
+    /// Prints the sampling cell grid for debugging
     pub fn print_sampling_cells(&self, path: Option<Vec<(usize, usize)>>) -> String {
         print_cells(
             self.width,
@@ -280,6 +280,7 @@ impl SampleGrid {
         )
     }
 
+    /// Plots the sampling cell grid for debugging
     pub fn plot_sampling_cells(
         &self,
         output_file: &str,

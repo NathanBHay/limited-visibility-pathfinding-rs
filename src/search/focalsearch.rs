@@ -1,12 +1,16 @@
-use std::{collections::{BinaryHeap, HashMap, HashSet, BTreeMap}, ops::Add, hash::Hash, fmt::Debug};
+use std::{
+    collections::{BTreeMap, BinaryHeap, HashMap, HashSet},
+    fmt::Debug,
+    hash::Hash,
+    ops::Add,
+};
 
-use super::{SearchNode, reconstruct_path_with_cost};
+use super::{reconstruct_path_with_cost, SearchNode};
 
 /// Open list for Focal Search. Supports insertion, removal, and popping the best node
 struct FSOpenList<N: Clone + Eq + Hash, C: Clone + Ord>(BTreeMap<C, HashSet<N>>);
 
 impl<N: Clone + Eq + Hash, C: Clone + Ord> FSOpenList<N, C> {
-
     fn insert(&mut self, node: N, cost: C) {
         self.0.entry(cost).or_insert_with(HashSet::new).insert(node);
     }
@@ -16,7 +20,7 @@ impl<N: Clone + Eq + Hash, C: Clone + Ord> FSOpenList<N, C> {
             nodes.remove(node);
             if nodes.is_empty() {
                 self.0.remove(cost); // This may be slower as there will be
-            }                            // cases where this map is recreated
+            } // cases where this map is recreated
             true
         } else {
             false
@@ -28,7 +32,9 @@ impl<N: Clone + Eq + Hash, C: Clone + Ord> FSOpenList<N, C> {
     }
 
     fn iter(&self) -> impl Iterator<Item = (&N, &C)> {
-        self.0.iter().flat_map(|(cost, nodes)| nodes.iter().map(move |node| (node, cost)))
+        self.0
+            .iter()
+            .flat_map(|(cost, nodes)| nodes.iter().map(move |node| (node, cost)))
     }
 }
 
@@ -43,18 +49,18 @@ impl<N: Clone + Eq + Hash, C: Clone + Ord> FSOpenList<N, C> {
 /// * `start` - The start node
 /// * `goal` - A function that returns whether or not a given node is the goal
 /// * `heuristic` - A function that returns the heuristic value of a given node
-/// * `focal_heuristic` - A function tha evaluates nodes within a range of 
+/// * `focal_heuristic` - A function tha evaluates nodes within a range of
 /// (0, epsilon] of the best node on the open list
 /// * ``focal_calc`` - A function that calculates epsilon combined with a cost
-/// to find whether a node is within the focal range. Focal calc should produce 
+/// to find whether a node is within the focal range. Focal calc should produce
 /// a value where focal_calc(f_min) >= f_min
 /// Vaguely based upon: https://www.ijcai.org/proceedings/2018/0199.pdf
 pub fn focal_search<E, I, C, N, G, H1, H2, F>(
     mut expander: E,
-    start: N, 
+    start: N,
     goal: G,
     // mut expanded_nodes: Option<&mut HashSet<N>>,
-    heuristic: H1, 
+    heuristic: H1,
     focal_heuristic: H2,
     focal_calc: F,
 ) -> Option<(Vec<N>, C)>
@@ -72,7 +78,7 @@ where
     open.insert(start.clone(), heuristic(&start));
     // Focal can be implemented as a heap sorted with the focal heuristic or as
     // a tuple with both heuristics. The latter is more efficienct given an
-    // expensive heuristic function or in cases where the tie breaking of the 
+    // expensive heuristic function or in cases where the tie breaking of the
     // focal heuristic is important. The former is more efficient in cases where
     // the amount of nodes in the focal list is large.
     let mut focal = BinaryHeap::from([SearchNode {
@@ -81,9 +87,13 @@ where
     }]);
     let mut previous = HashMap::new();
     previous.insert(start.clone(), (None, C::default()));
-    while let Some(SearchNode { node, cost: (fcost, hcost) }) = focal.pop() {
+    while let Some(SearchNode {
+        node,
+        cost: (fcost, hcost),
+    }) = focal.pop()
+    {
         // if let Some(expanded_nodes) = expanded_nodes.as_mut() {
-            // expanded_nodes.insert(node.clone());
+        // expanded_nodes.insert(node.clone());
         // }
         if goal(&node) {
             return Some(reconstruct_path_with_cost(previous, node.clone()));
@@ -113,7 +123,10 @@ where
                     if *cost > focal_calc(&f_min) && *cost <= focal_calc(hcost) {
                         focal.push(SearchNode {
                             node: node.clone(),
-                            cost: (previous[node].1.clone() + focal_heuristic(&node), cost.clone()),
+                            cost: (
+                                previous[node].1.clone() + focal_heuristic(&node),
+                                cost.clone(),
+                            ),
                         });
                     }
                 }
@@ -122,7 +135,6 @@ where
     }
     None
 }
-
 
 #[cfg(test)]
 mod test {
@@ -161,16 +173,34 @@ mod test {
     #[test]
     fn test_focal_search_bitpacked_grid() {
         // In this example the focal list == open list at each iteration
-        let grid = crate::domains::bitpackedgrid::BitPackedGrid::new_from_string(".....\n.###.\n.#...\n.#.#.\n...#.".to_string());
+        let grid = crate::domains::bitpackedgrid::BitPackedGrid::new_from_string(
+            ".....\n.###.\n.#...\n.#.#.\n...#.".to_string(),
+        );
         let path = focal_search(
-            |(x, y)| grid.adjacent((x.clone(), y.clone()), false).map(|(x, y)| ((x, y), 1)), 
+            |(x, y)| {
+                grid.adjacent((x.clone(), y.clone()), false)
+                    .map(|(x, y)| ((x, y), 1))
+            },
             (0, 4),
             |n| n == &(4, 4),
             |n| manhattan_distance(*n, (4, 4)), // Fix: Dereference the reference to the tuple
             |_| 0,
             |x| *x,
         );
-        assert_eq!(path.unwrap().0, vec![(0, 4), (1, 4), (2, 4), (2, 3), (2, 2), (3, 2), (4, 2), (4, 3), (4, 4)]);
+        assert_eq!(
+            path.unwrap().0,
+            vec![
+                (0, 4),
+                (1, 4),
+                (2, 4),
+                (2, 3),
+                (2, 2),
+                (3, 2),
+                (4, 2),
+                (4, 3),
+                (4, 4)
+            ]
+        );
     }
 }
 // ee...\n

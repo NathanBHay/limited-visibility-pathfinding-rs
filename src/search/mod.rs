@@ -1,13 +1,13 @@
 #![allow(dead_code)]
 
-use std::{collections::HashMap, hash::Hash, ops::Add, cmp::Ordering};
+use std::{cmp::Ordering, collections::HashMap, hash::Hash, ops::Add};
 
-pub mod uninformed;
 pub mod astar;
 pub mod dstarlite;
-pub mod samplestar;
 pub mod focalsearch;
 mod pathstore;
+pub mod samplestar;
+pub mod uninformed;
 /// Reconstructs a path from a given node to the start node
 /// ## Arguments
 /// * `parent` - A map of nodes to their parent nodes

@@ -1,25 +1,26 @@
 use serde_json::json;
-use std::{fs::File, collections::HashMap};
+use std::{collections::HashMap, fs::File};
 
-use crate::domains::{samplegrid::SampleGrid, bitpackedgrid::BitPackedGrid, adjacencylist::AdjacencyList};
 use crate::domains::neighbors;
+use crate::domains::{
+    adjacencylist::AdjacencyList, bitpackedgrid::BitPackedGrid, samplegrid::SampleGrid,
+};
 
-/// Visualiser tool for `SampleGrid` 
-/// 
+/// Visualiser tool for `SampleGrid`
+///
 pub struct Visualiser {
     file_path: String,
     start: Option<(usize, usize)>,
     goal: Option<(usize, usize)>,
 }
 
-
 impl Visualiser {
-
     /// Create a new visualiser for a `SampleGrid` with a start and goal
-    pub fn new(file_path: &str,
+    pub fn new(
+        file_path: &str,
         sample_grid: &SampleGrid,
         start: Option<(usize, usize)>,
-        goal: Option<(usize, usize)>
+        goal: Option<(usize, usize)>,
     ) -> Self {
         let visualiser = Visualiser {
             file_path: file_path.to_string(),
@@ -48,12 +49,13 @@ impl Visualiser {
     }
 
     /// Visualise the current state of the grid and found paths
-    pub fn visualise_iteration(&self,
+    pub fn visualise_iteration(
+        &self,
         sample_grid: &SampleGrid,
         iteration: usize,
-        current: Option<(usize,usize)>,
+        current: Option<(usize, usize)>,
         next: Option<(usize, usize)>,
-        paths: &HashMap<(usize, usize), usize>
+        paths: &HashMap<(usize, usize), usize>,
     ) {
         let sample_grid = json!({
             "sample_grid": get_sample_grid(&sample_grid),

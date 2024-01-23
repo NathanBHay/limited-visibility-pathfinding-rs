@@ -1,8 +1,7 @@
-use std::collections::HashMap;
 use std::collections::hash_map::ValuesMut;
+use std::collections::HashMap;
 use std::hash::Hash;
 use std::ops::{Index, IndexMut};
-
 
 #[derive(Debug, Clone)]
 pub struct AdjacencyList<N: Eq + Hash, W>(HashMap<N, Vec<(N, W)>>);

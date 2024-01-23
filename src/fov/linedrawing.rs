@@ -1,19 +1,15 @@
 //! Line drawing algorithms that draw a rasterized line between two points.
 //! This has two approaches one basic one that uses floating points, here
 //! as a baseline, and Bresenham's line algorithm the more efficient one.
-//! 
-//! A possible expansion in the future is implementations that use chain 
-//! codes rather than a list. A chain code is a binary encoding of the 
+//!
+//! A possible expansion in the future is implementations that use chain
+//! codes rather than a list. A chain code is a binary encoding of the
 //! lines where 0 represents the next pixel being placed to the right,
 //! while 1 represents the next pixel being placed to the right and up.
 //! Source for codes: https://www.roguebasin.com/index.php/Digital_lines
 
-
 /// Basic line drawing algorithm, inefficient but simple.
-pub fn basic_line(
-    (x0, y0): (usize, usize), 
-    (x1, y1): (usize, usize)
-) -> Vec<(usize, usize)> {
+pub fn basic_line((x0, y0): (usize, usize), (x1, y1): (usize, usize)) -> Vec<(usize, usize)> {
     let (x0, y0, x1, y1) = (x0 as i32, y0 as i32, x1 as i32, y1 as i32);
     let mut line = Vec::new();
     let m = (y1 - y0) as f32 / (x1 - x0) as f32;
@@ -30,20 +26,19 @@ pub fn basic_line(
 }
 
 /// Bresenham's line algorithm for all 2D octants.
-/// This implementation is adapted from the JS version found here: 
+/// This implementation is adapted from the JS version found here:
 /// https://www.roguebasin.com/index.php/Bresenham%27s_Line_Algorithm
-/// This approach draws the line from the origin to the end point, 
+/// This approach draws the line from the origin to the end point,
 /// making it able to be used for raycasting.
-/// Possibly could include a expansion function that allows the line 
-/// to work out whether line of sight is blocked thus terminating 
+/// Possibly could include a expansion function that allows the line
+/// to work out whether line of sight is blocked thus terminating
 /// the algorithm.
 pub fn bresenham(
     (x0, y0): (usize, usize),
     (x1, y1): (usize, usize),
     mut visibility_check: impl FnMut(usize, usize) -> bool,
 ) -> Vec<(usize, usize)> {
-    let (mut x0, mut y0, mut x1, mut y1)
-        = (x0 as isize, y0 as isize, x1 as isize, y1 as isize);
+    let (mut x0, mut y0, mut x1, mut y1) = (x0 as isize, y0 as isize, x1 as isize, y1 as isize);
     let steep = (y1 - y0).abs() > (x1 - x0).abs();
     if steep {
         (x0, y0, x1, y1) = (y0, x0, y1, x1)

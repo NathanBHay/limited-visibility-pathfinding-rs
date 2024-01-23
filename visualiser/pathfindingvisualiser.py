@@ -16,6 +16,9 @@ class Visualiser:
         self.goal = None
 
     def visualise_start_end(self):
+        """
+        Visualise the start and end points of the file_ground_truth.json file
+        """
         with open(f'{self.file_name}_ground_truth.json') as f:
             ground_truth = json_load(f)
             if start := ground_truth['start']:

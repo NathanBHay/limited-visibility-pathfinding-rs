@@ -3,6 +3,6 @@
 //! view or visibility of a map.
 
 #![allow(dead_code)]
-pub mod pathcounting;
-pub mod linedrawing;
 pub mod fieldofvision;
+pub mod linedrawing;
+pub mod pathcounting;

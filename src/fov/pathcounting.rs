@@ -4,9 +4,9 @@ use std::collections::HashMap;
 /// Adapted from python version found at:
 /// https://towardsdatascience.com/a-quick-and-clear-look-at-grid-based-visibility-bf63769fbc78
 pub fn compute_visibility_from_corner(
-    (x, y): (usize, usize), 
-    radius: usize, 
-    visibility_check: impl Fn(usize, usize) -> bool
+    (x, y): (usize, usize),
+    radius: usize,
+    visibility_check: impl Fn(usize, usize) -> bool,
 ) -> Vec<((usize, usize), f32)> {
     let mut visible = HashMap::new();
     for i in 0..=radius {
@@ -17,10 +17,10 @@ pub fn compute_visibility_from_corner(
         }
     }
     for x in 0..=radius {
-        let s = if x == 0 { 1 } else {0};
+        let s = if x == 0 { 1 } else { 0 };
         for y in s..=radius {
-            let path_count = (x as f32) * visible.get(&(x.saturating_sub(1), y)).unwrap_or(&0.0) + 
-                                  (y as f32) * visible.get(&(x, y.saturating_sub(1))).unwrap_or(&0.0);
+            let path_count = (x as f32) * visible.get(&(x.saturating_sub(1), y)).unwrap_or(&0.0)
+                + (y as f32) * visible.get(&(x, y.saturating_sub(1))).unwrap_or(&0.0);
             visible.insert((x, y), path_count / ((x + y) as f32));
         }
     }
