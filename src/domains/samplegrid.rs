@@ -2,8 +2,8 @@ use super::bitpackedgrid::BitPackedGrid;
 use super::{create_map_from_string, plot_cells, print_cells};
 use crate::fov::fieldofvision::raycast_matrix;
 use crate::matrix;
-use crate::util::matrix::{convolve2d, ConvResolve, matrix_overlay, Matrix};
 use crate::util::filter::KalmanNode;
+use crate::util::matrix::{convolve2d, matrix_overlay, ConvResolve, Matrix};
 
 pub struct SampleGrid {
     /// The sampling grid which determines the probability of a cell being occupied.
@@ -13,6 +13,9 @@ pub struct SampleGrid {
     /// The bitpacked grid which represents sampled cells
     /// TODO: This cam be simplified to a smaller sub grid
     pub gridmap: BitPackedGrid,
+
+    /// Places where the grid has been sampled before
+    pub sampled_before: BitPackedGrid,
 
     /// The real values of the grid
     pub ground_truth: BitPackedGrid,
@@ -31,8 +34,10 @@ impl SampleGrid {
         let width = grid.height;
         let height = grid.width;
         let mut sample_grid = matrix![KalmanNode::default(); height, width];
-        for y in 0..width {         // Swapped width and height here
-            for x in 0..height {    // to match the matrix indexing
+        for y in 0..width {
+            // Swapped width and height here
+            for x in 0..height {
+                // to match the matrix indexing
                 sample_grid[x][y].state = grid[x][y];
             }
         }
@@ -42,6 +47,7 @@ impl SampleGrid {
             ground_truth,
             width,
             height,
+            sampled_before: BitPackedGrid::new(width, height),
         };
         grid.init_gridmap();
         grid
@@ -56,6 +62,7 @@ impl SampleGrid {
             ground_truth: BitPackedGrid::new(width, height),
             width,
             height,
+            sampled_before: BitPackedGrid::new(width, height),
         }
     }
 
@@ -65,7 +72,7 @@ impl SampleGrid {
             grid.sample_grid[x][y].state = 1.0;
         });
         grid.init_ground_truth(); // These aren't good practice as they are an
-        grid.init_gridmap();      // weird side effect
+        grid.init_gridmap(); // weird side effect
         grid
     }
 
@@ -74,13 +81,14 @@ impl SampleGrid {
         let s = std::fs::read_to_string(filename).expect("Unable to read file");
         SampleGrid::new_from_string(s)
     }
-    
+
     /// Initializes an area of the bitfield from the sampling grid values, where
     /// 0.0 indicates a guaranteed obstacles and (0,1) indicates a probability
     pub fn init_gridmap_area(&mut self, (x, y): (usize, usize), width: usize, height: usize) {
         for x in x..x + width {
             for y in y..y + height {
-                self.gridmap.set_bit_value((x, y), self.sample_grid[x][y].state != 0.0);
+                self.gridmap
+                    .set_bit_value((x, y), self.sample_grid[x][y].state != 0.0);
             }
         }
     }
@@ -88,7 +96,10 @@ impl SampleGrid {
     pub fn init_gridmap_nearest(&mut self) {
         for x in 0..self.width {
             for y in 0..self.height {
-                self.gridmap.set_bit_value((x, y), self.sample_grid[x][y].state > Self::NEAREST_THRESHOLD);
+                self.gridmap.set_bit_value(
+                    (x, y),
+                    self.sample_grid[x][y].state > Self::NEAREST_THRESHOLD,
+                );
             }
         }
     }
@@ -108,11 +119,18 @@ impl SampleGrid {
         self.init_gridmap_area((0, 0), self.width, self.height);
     }
 
+    /// Initialize the sampled before grid
+    pub fn init_sampled_before(&mut self) {
+        // TODO: Calculate a mask that does this slightly faster
+        self.sampled_before = BitPackedGrid::new(self.width, self.height)
+    }
+
     /// Initializes the ground truth grid from the sampling grid
     pub fn init_ground_truth(&mut self) {
         for x in 0..self.width {
             for y in 0..self.height {
-                self.ground_truth.set_bit_value((x, y), self.sample_grid[x][y].state != 0.0);
+                self.ground_truth
+                    .set_bit_value((x, y), self.sample_grid[x][y].state != 0.0);
             }
         }
     }
@@ -120,17 +138,15 @@ impl SampleGrid {
     /// Blurs the sampling grid with a gaussian kernal.
     /// Note that this operation sets all covariances to 1.0
     pub fn blur_samplegrid(&mut self, kernel: &Matrix<f32>) {
-        self.sample_grid = convolve2d(
-            &self.sample_grid,
-            kernel,
-            ConvResolve::Nearest,
-        );
+        self.sample_grid = convolve2d(&self.sample_grid, kernel, ConvResolve::Nearest);
     }
 
     /// Samples a cell with a given chance
-    pub fn sample(&mut self, (x, y): (usize, usize)) {
-        let value = self.sample_grid[x][y].state != 0.0 && rand::random::<f32>() < self.sample_grid[x][y].state;
+    pub fn sample(&mut self, (x, y): (usize, usize)) -> bool {
+        let value = self.sample_grid[x][y].state != 0.0
+            && rand::random::<f32>() < self.sample_grid[x][y].state;
         self.gridmap.set_bit_value((x, y), value);
+        value
     }
 
     /// Samples an area of the grid
@@ -143,7 +159,11 @@ impl SampleGrid {
     }
 
     // Calculates the radius of the sampling area
-    pub fn radius_calc(&self, (x, y): (usize, usize), radius: usize) -> ((usize, usize), usize, usize) {
+    pub fn radius_calc(
+        &self,
+        (x, y): (usize, usize),
+        radius: usize,
+    ) -> ((usize, usize), usize, usize) {
         let radius = radius + 1;
         let x_min = x.saturating_sub(radius);
         let y_min = y.saturating_sub(radius);
@@ -174,7 +194,7 @@ impl SampleGrid {
 
     /// Creates a kernel for the adjacency of a point. Used to update nodes with
     /// matrix representing covariance.
-    pub fn adjacency_kernel(&self, kernel: &Matrix<f32>)-> Matrix<f32> {
+    pub fn adjacency_kernel(&self, kernel: &Matrix<f32>) -> Matrix<f32> {
         let mut kernel = kernel.clone();
         let radius = kernel.width / 2;
         kernel[radius][radius] = 0.0;
@@ -192,7 +212,7 @@ impl SampleGrid {
             self.update_node(n, kernel[i][j]);
         }
     }
-    
+
     /// Updates nodes based upon a radius
     pub fn update_radius(&mut self, (x, y): (usize, usize), kernel: &Matrix<f32>) {
         let kernel = self.adjacency_kernel(kernel);
@@ -202,12 +222,18 @@ impl SampleGrid {
     /// Updates nodes based on visibile nodes
     pub fn raycast_update(&mut self, (x, y): (usize, usize), kernel: &Matrix<f32>) -> usize {
         let mut kernel = self.adjacency_kernel(kernel);
-        
-        let visible = raycast_matrix((x, y), kernel.width / 2, |x, y| {
-            self.sample_grid[x.min(self.width-1)][y.min(self.height-1)].state > Self::NEAREST_THRESHOLD},
-            |x, y| self.bound_check((x, y)));
+
+        let visible = raycast_matrix(
+            (x, y),
+            kernel.width / 2,
+            |x, y| {
+                self.sample_grid[x.min(self.width - 1)][y.min(self.height - 1)].state
+                    > Self::NEAREST_THRESHOLD
+            },
+            |x, y| self.bound_check((x, y)),
+        );
         for (k, v) in kernel.data.iter_mut().zip(visible.data.iter()) {
-            if *v  {
+            if *v {
                 *k = 1.0;
             }
         }
@@ -221,22 +247,63 @@ impl SampleGrid {
     }
 
     /// Get all adjacenct cells on sampling grid
-    pub fn adjacent(&self, (x, y): (usize, usize), diagonal: bool) -> impl Iterator<Item = (usize, usize)> + '_ {
-        super::neighbors(x, y, diagonal).filter(move |(x, y)| self.bound_check((*x, *y)))
+    pub fn adjacent(
+        &self,
+        (x, y): (usize, usize),
+        diagonal: bool,
+    ) -> impl Iterator<Item = (usize, usize)> + '_ {
+        super::neighbors(x, y, diagonal).filter(|(x, y)| self.bound_check((*x, *y)))
+    }
+
+    pub fn sample_adjacenct(
+        &mut self,
+        (x, y): (usize, usize),
+    ) -> impl Iterator<Item = (usize, usize)> + '_ {
+        super::neighbors(x, y, false)
+            .filter(move |(x, y)| {
+                if self.bound_check((x, y)) && !self.sampled_before.get_bit_value((*x, *y)) {
+                    self.sample((*x, *y))
+                } else {
+                    self.gridmap.get_bit_value((*x, *y))
+                }
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
     }
 
     pub fn print_sampling_cells(&self, path: Option<Vec<(usize, usize)>>) -> String {
-        print_cells(self.width, self.height, |x, y| self.sample_grid[x][y].state != 0.0, path)
+        print_cells(
+            self.width,
+            self.height,
+            |x, y| self.sample_grid[x][y].state != 0.0,
+            path,
+        )
     }
 
-    pub fn plot_sampling_cells(&self, output_file: &str, path: Option<Vec<(usize, usize)>>, heatmap: Option<Vec<((usize, usize), f64)>>) {
-        plot_cells(self.width, self.height, output_file, |x, y| self.sample_grid[x][y].state != 0.0, path, heatmap)
+    pub fn plot_sampling_cells(
+        &self,
+        output_file: &str,
+        path: Option<Vec<(usize, usize)>>,
+        heatmap: Option<Vec<((usize, usize), f64)>>,
+    ) {
+        plot_cells(
+            self.width,
+            self.height,
+            output_file,
+            |x, y| self.sample_grid[x][y].state != 0.0,
+            path,
+            heatmap,
+        )
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{domains::bitpackedgrid::BitPackedGrid, matrix, util::matrix::{Matrix, gaussian_kernal}};
+    use crate::{
+        domains::bitpackedgrid::BitPackedGrid,
+        matrix,
+        util::matrix::{gaussian_kernal, Matrix},
+    };
 
     use super::SampleGrid;
 
@@ -251,7 +318,8 @@ mod tests {
 
     #[test]
     fn test_samplegrid_new_from_grid() {
-        let grid = SampleGrid::new_from_grid(matrix![[0.0, 1.0], [1.0, 0.0]], BitPackedGrid::new(2, 2));
+        let grid =
+            SampleGrid::new_from_grid(matrix![[0.0, 1.0], [1.0, 0.0]], BitPackedGrid::new(2, 2));
         assert_eq!(grid.sample_grid[0][0].state, 0.0);
         assert_eq!(grid.sample_grid[1][0].state, 1.0);
         assert_eq!(grid.gridmap.get_bit_value((0, 0)), false);
@@ -278,24 +346,29 @@ mod tests {
         grid.gridmap = BitPackedGrid::new(grid.width, grid.height);
         grid.init_gridmap_radius((0, 0), 2);
         grid.init_ground_truth();
-        assert_eq!(grid.ground_truth.print_cells(None), "@....\n.....\n.....\n.....\n");
-        assert_eq!(grid.gridmap.print_cells(None), "@..@@\n...@@\n...@@\n@@@@@\n");
+        assert_eq!(
+            grid.ground_truth.print_cells(None),
+            "@....\n.....\n.....\n.....\n"
+        );
+        assert_eq!(
+            grid.gridmap.print_cells(None),
+            "@..@@\n...@@\n...@@\n@@@@@\n"
+        );
     }
 
     #[test]
     fn test_blur() {
-        let mut grid = SampleGrid::new_from_string("@....\n@@...\n@@@..\n@@@..\n@@...\n".to_string());
+        let mut grid =
+            SampleGrid::new_from_string("@....\n@@...\n@@@..\n@@@..\n@@...\n".to_string());
         grid.blur_samplegrid(&gaussian_kernal(3, 1.0));
-        let grid_sample: Vec<f32> = grid.sample_grid.data
-            .iter()
-            .map(|x| x.state)
-            .collect();
-        assert_eq!(grid_sample, vec![
-            0.19895503, 0.07511361, 0.0, 0.0, 0.0,
-            0.60209, 0.32279643, 0.07511361, 0.07511361, 0.19895503,
-            0.9248864, 0.6772036, 0.39791006, 0.39791006, 0.60209,
-            1.0, 0.9248864, 0.801045, 0.801045, 0.9248864,
-            1.0, 1.0, 1.0, 1.0, 1.,
-        ]);
+        let grid_sample: Vec<f32> = grid.sample_grid.data.iter().map(|x| x.state).collect();
+        assert_eq!(
+            grid_sample,
+            vec![
+                0.19895503, 0.07511361, 0.0, 0.0, 0.0, 0.60209, 0.32279643, 0.07511361, 0.07511361,
+                0.19895503, 0.9248864, 0.6772036, 0.39791006, 0.39791006, 0.60209, 1.0, 0.9248864,
+                0.801045, 0.801045, 0.9248864, 1.0, 1.0, 1.0, 1.0, 1.,
+            ]
+        );
     }
 }
