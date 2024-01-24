@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from json import load as json_load
 from matplotlib.cm import viridis, Greys
+import argparse
 
 viridis1 = viridis(1.0)
 
@@ -41,7 +42,7 @@ class Visualiser:
         """
         Visualise the file_sample_grid.json file
         """
-        self.ax.set_title(f'{self.file_name.capitalize()} Sample Grid')
+        self.ax.set_title(f'{self.file_name.capitalize()} Sample Grid at Iteration {iteration}')
         with open(f'{self.file_name}_step_{iteration}.json') as f:
             sample_grid_obj = json_load(f)
             if labels:
@@ -72,11 +73,16 @@ class Visualiser:
                     elif diff == (-1, 0): marker = '<'
                 self.ax.scatter(next[0], next[1], color=viridis1, s=200, marker=marker)
 
+            if stats := sample_grid_obj['stats']:
+                for stat in stats:
+                    self.ax.text(stat[0], stat[1], ha="bottom", va="left", color=viridis1)
+
     def visualise_final_path(self):
         """
         Visualise the file_final_path.json file
         """
         self.ax.set_title(f'{self.file_name.capitalize()} Final Path')
+        self.visualise_start_end()
         with open(f'{self.file_name}_final_path.json') as f:
             for path in json_load(f)['path']:
                 for p in path[1]:
@@ -91,17 +97,32 @@ class Visualiser:
         plt.savefig(f'{self.file_name}_ground_truth.png')
         self.ax.cla()
         for i in range(1, limit+1):
+            self.visualise_ground_truth()
             try:
-                self.visualise_ground_truth()
                 self.visualise_sample_grid(i, labels)
-                plt.savefig(f'{self.file_name}_step_{i}.png')
-            except: break
+            except FileNotFoundError: break
+            plt.savefig(f'{self.file_name}_step_{i}.png')
             self.ax.cla()
+        self.ax.cla()
         self.visualise_ground_truth()
         self.visualise_final_path()
         plt.savefig(f'{self.file_name}_final_path.png')
         self.ax.cla()
 
+def main():
+    parser = argparse.ArgumentParser(description='Visualise pathfinding algorithms')
+    parser.add_argument('file_name', type=str, help='The name of the file to visualise')
+    parser.add_argument('-vs', '--visualise-specific', type=int, help='The specific step to visualise')
+    parser.add_argument('-l', '--labels', type=bool, default=False, help='Whether to show labels on the sample grid')
+    parser.add_argument('-i', '--limit', type=int, default=1000, help='The maximum number of steps to visualise')
+    args = parser.parse_args()
+    v = Visualiser(args.file_name)
+    if args.visualise_specific:
+        v.visualise_ground_truth()
+        v.visualise_sample_grid(args.visualise_specific, args.labels)
+        plt.show()
+    else:
+        v.visualise_all(args.labels, args.limit)
+
 if __name__ == '__main__':
-    v = Visualiser('test')
-    v.visualise_all(False)
+    main()

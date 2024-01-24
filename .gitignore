@@ -1,4 +1,8 @@
-/target
 /maps
+/target
+/tests/results
+*.data
+*.data.old
 *.png
 *.json
+*.svg

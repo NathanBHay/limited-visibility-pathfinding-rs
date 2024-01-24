@@ -260,14 +260,16 @@ impl SampleGrid {
     pub fn sample_adjacenct(
         &mut self,
         (x, y): (usize, usize),
-    ) -> impl Iterator<Item = (usize, usize)> + '_ {
-        super::neighbors(x, y, false).filter(move |(x, y)| {
-            if self.bound_check((*x, *y)) && !self.sampled_before.get_bit_value((*x, *y)) {
-                self.sample((*x, *y))
-            } else {
-                self.gridmap.get_bit_value((*x, *y))
-            }
-        })
+    ) -> impl Iterator<Item = ((usize, usize), usize)> + '_ {
+        super::neighbors(x, y, false)
+            .filter(move |(x, y)| {
+                if self.bound_check((*x, *y)) && !self.sampled_before.get_bit_value((*x, *y)) {
+                    self.sample((*x, *y))
+                } else {
+                    self.gridmap.get_bit_value((*x, *y))
+                }
+            })
+            .map(|n| (n, 1))
     }
 
     /// Prints the sampling cell grid for debugging

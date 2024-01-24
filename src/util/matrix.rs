@@ -208,6 +208,16 @@ pub fn gaussian_kernal(size: usize, sigma: f32) -> Matrix<f32> {
     kernel
 }
 
+/// Gaussian Kernel that finds 1 - kernel value. Used for visibility
+/// function
+pub fn gaussian_kernel_rev(size: usize, sigma: f32) -> Matrix<f32> {
+    let mut kernel = gaussian_kernal(size, sigma);
+    for x in kernel.data.iter_mut() {
+        *x = 1.0 - *x;
+    }
+    kernel
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

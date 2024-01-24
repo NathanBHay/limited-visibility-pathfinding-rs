@@ -51,17 +51,19 @@ impl Visualiser {
     /// Visualise the current state of the grid and found paths
     pub fn visualise_iteration(
         &self,
-        sample_grid: &SampleGrid,
+        sample_grid: Option<&SampleGrid>,
         iteration: usize,
         current: Option<(usize, usize)>,
         next: Option<(usize, usize)>,
         paths: &HashMap<(usize, usize), usize>,
+        stats: Option<Vec<(&str, &str)>>,
     ) {
         let sample_grid = json!({
-            "sample_grid": get_sample_grid(&sample_grid),
+            "sample_grid": get_sample_grid(sample_grid),
             "current": current,
             "next": next,
             "paths": hashmap_to_adjlist(paths).iter().collect::<Vec<_>>(),
+            "stats": stats,
         });
         let mut file = File::create(format!("{}_step_{}.json", self.file_path, iteration)).unwrap();
         serde_json::to_writer_pretty(&mut file, &sample_grid).unwrap();
@@ -81,14 +83,20 @@ impl Visualiser {
     }
 }
 
-fn get_sample_grid(grid: &SampleGrid) -> Vec<Vec<f32>> {
-    let mut sample_grid = vec![vec![0.0; grid.height]; grid.width];
-    for x in 0..grid.width {
-        for y in 0..grid.height {
-            sample_grid[x][y] = grid.sample_grid[x][y].state;
+fn get_sample_grid(grid: Option<&SampleGrid>) -> Vec<Vec<f32>> {
+    match grid {
+        Some(grid) => {
+            // TODO: Optimize this to copy directly from the grid
+            let mut sample_grid = vec![vec![0.0; grid.height]; grid.width];
+            for x in 0..grid.width {
+                for y in 0..grid.height {
+                    sample_grid[x][y] = grid.sample_grid[x][y].state;
+                }
+            }
+            sample_grid
         }
+        _ => Vec::new(),
     }
-    sample_grid
 }
 
 fn hashmap_to_adjlist(map: &HashMap<(usize, usize), usize>) -> AdjacencyList<(usize, usize), f32> {

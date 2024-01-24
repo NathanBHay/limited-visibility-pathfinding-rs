@@ -15,8 +15,8 @@ use crate::{
 
 use super::{focalsearch::focal_search, pathstore::PathStore};
 
-type SampleStratT = Box<dyn FnMut(&mut SampleGrid, (usize, usize), usize)>;
-type PathStoreT = Box<dyn PathStore<(usize, usize), usize>>;
+pub type SampleStratT = Box<dyn FnMut(&mut SampleGrid, (usize, usize), usize)>;
+pub type PathStoreT = Box<dyn PathStore<(usize, usize), usize>>;
 
 /// Sample Star Algorithm
 /// ## Arguments
@@ -26,14 +26,14 @@ type PathStoreT = Box<dyn PathStore<(usize, usize), usize>>;
 /// * `epoch` - The number of times to sample each node.
 /// * `radius` - The radius to sample around each node.
 pub struct SampleStar {
-    grid: SampleGrid,
-    previous: (usize, usize),
-    current: (usize, usize),
-    goal: (usize, usize),
+    pub grid: SampleGrid,
+    pub previous: (usize, usize),
+    pub current: (usize, usize),
+    pub goal: (usize, usize),
     epoch: usize,
     kernel: Matrix<f32>,
-    final_path: Vec<(usize, usize)>,
-    path_store: PathStoreT,
+    pub final_path: Vec<(usize, usize)>,
+    pub path_store: PathStoreT,
     sample_stategy: SampleStratT,
 }
 
@@ -72,13 +72,14 @@ impl SampleStar {
         self.grid.raycast_update(self.current, &self.kernel);
         self.grid.init_gridmap_nearest(); // Currently more accurate than other methods
         for _ in 0..self.epoch {
-            (self.sample_stategy)(&mut self.grid, self.current, self.kernel.width / 2);
+            // (self.sample_stategy)(&mut self.grid, self.current, self.kernel.width /
+            self.grid.init_sampled_before();
             if let Some((path, weight)) = focal_search(
-                |n| self.grid.gridmap.adjacent1(*n),
+                |n| self.grid.sample_adjacenct(*n).collect::<Vec<_>>(),
                 self.current,
                 |n| *n == self.goal,
                 |n| manhattan_distance(*n, self.goal),
-                |n| manhattan_distance(*n, self.goal),
+                |_| 0,
                 |n| *n,
             ) {
                 self.path_store.add_path(Box::new(path.into_iter()), weight);
@@ -121,67 +122,3 @@ Premade Sample Strategies
 |grid, _, _| grid.sample_all()
 |grid, current, radius| grid.sample_radius(current, radius)
 */
-
-#[cfg(test)]
-mod tests {
-
-    use super::*;
-    use crate::{
-        search::pathstore::AccStore,
-        util::{matrix::gaussian_kernal, visualiser::Visualiser},
-    };
-
-    #[test]
-    fn test_samplestar() {
-        let (file, start, goal) = maps::BASIC;
-        let mut grid = SampleGrid::new_from_file(file);
-        grid.blur_samplegrid(&gaussian_kernal(5, 1.0));
-        let path_store: PathStoreT = Box::new(AccStore::new_count_store());
-        let sample_strat: SampleStratT = Box::new(
-            |grid: &mut SampleGrid, current: (usize, usize), radius: usize| {
-                grid.sample_radius(current, radius)
-            },
-        );
-        let mut samplestar = SampleStar::new(
-            grid,
-            start,
-            goal,
-            10,
-            gaussian_kernal(5, 1.0),
-            path_store,
-            sample_strat,
-        );
-        let visualiser = Visualiser::new("test", &samplestar.grid, Some(start), Some(goal));
-
-        for i in 1..=10000 {
-            if samplestar.step() {
-                break;
-            }
-            visualiser.visualise_iteration(
-                &samplestar.grid,
-                i,
-                Some(samplestar.previous.clone()),
-                Some(samplestar.current.clone()),
-                samplestar.path_store.get_paths(),
-            );
-        }
-        visualiser.visualise_final_path(&samplestar.final_path);
-    }
-}
-
-mod maps {
-    type Map = (&'static str, (usize, usize), (usize, usize));
-    pub const BASIC: Map = ("tests/basic.map", (1, 1), (30, 30));
-    pub const MAP: Map = ("tests/map.map", (225, 225), (70, 40));
-    pub const WALL: Map = ("tests/wall/wall.map", (3, 1), (3, 6));
-    pub const CACAVERNS: Map = ("tests/ca_caverns1.map", (122, 595), (200, 15));
-    pub const DRYWATER: Map = ("tests/drywatergulch.map", (175, 315), (320, 125));
-    pub const FLOODEDPLAINS: Map = ("tests/FloodedPlains.map", (160, 100), (480, 330));
-    pub const HRT: Map = ("tests/hrt201d.map", (70, 28), (250, 235));
-    pub const LAK: Map = ("tests/lak201d.map", (30, 150), (100, 50));
-    pub const MAZE: Map = ("tests/maze512-8-4.map", (10, 10), (380, 325));
-    pub const MEDUSA: Map = ("tests/Medusa.map", (60, 250), (460, 20));
-    pub const SIROCCO: Map = ("tests/Sirocco.map", (10, 250), (750, 250));
-    pub const TRISKELION: Map = ("tests/Triskelion.map", (260, 500), (10, 10));
-    pub const WAYPOINTJUNCTION: Map = ("tests/WaypointJunction.map", (245, 20), (260, 500));
-}

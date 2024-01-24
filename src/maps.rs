@@ -1,8 +1,9 @@
-/// Map problems for testing. Contains a path to the map, the start and goal coordinates.
+#![allow(dead_code)]
+/// Map problems for testing. Contains a path to the map, the start and goal
 type Map = (&'static str, (usize, usize), (usize, usize));
 pub const BASIC: Map = ("tests/basic.map", (1, 1), (30, 30));
 pub const MAP: Map = ("tests/map.map", (225, 225), (70, 40));
-pub const WALL: Map = ("tests/wall/wall.map", (3, 1), (3, 6));
+pub const WALL: Map = ("tests/wall.map", (3, 1), (3, 6));
 pub const CACAVERNS: Map = ("tests/ca_caverns1.map", (122, 595), (200, 15));
 pub const DRYWATER: Map = ("tests/drywatergulch.map", (175, 315), (320, 125));
 pub const FLOODEDPLAINS: Map = ("tests/FloodedPlains.map", (160, 100), (480, 330));

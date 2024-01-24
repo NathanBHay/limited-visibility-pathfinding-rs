@@ -5,7 +5,7 @@ use std::{cmp::Ordering, collections::HashMap, hash::Hash, ops::Add};
 pub mod astar;
 pub mod dstarlite;
 pub mod focalsearch;
-mod pathstore;
+pub mod pathstore;
 pub mod samplestar;
 pub mod uninformed;
 /// Reconstructs a path from a given node to the start node
