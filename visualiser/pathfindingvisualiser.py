@@ -1,5 +1,8 @@
 """
 This is a visualiser for pathfinding algorithms for more specific analysis of
+
+This could be optimised in the future with a faster json parser, or a faster
+visualisation library.
 """
 
 import matplotlib.pyplot as plt
@@ -18,7 +21,8 @@ class Visualiser:
 
     def visualise_start_end(self):
         """
-        Visualise the start and end points of the file_ground_truth.json file
+        Visualise the start and end points of the file_ground_truth.json file. Points in (x, y)
+        notation.
         """
         with open(f'{self.file_name}_ground_truth.json') as f:
             ground_truth = json_load(f)
@@ -30,7 +34,7 @@ class Visualiser:
 
     def visualise_ground_truth(self):
         """
-        Visualise the file_ground_truth.json file
+        Visualise the file_ground_truth.json file. The ground truth is represented as a 2d bool array.
         """
         self.ax.set_title(f'{self.file_name.capitalize()} Ground Truth')
         with open(f'{self.file_name}_ground_truth.json') as f:
@@ -38,9 +42,12 @@ class Visualiser:
             ground_truth = np.array(ground_truth['grid']).astype(bool).transpose()
             self.ax.imshow(ground_truth, cmap='gray')
 
-    def visualise_sample_grid(self, iteration: int, labels: bool = True):
+    def visualise_samplestar(self, iteration: int, labels: bool = True):
         """
-        Visualise the file_sample_grid.json file
+        Visualise the file_sample_grid.json file. The sample grid itself is represented
+        as a 2d array. The paths are just a series of points with a count of how many
+        times they were visited. The current and next points follow basic (x, y) notation.
+        The stats are a list of important stats added to the legend.
         """
         self.ax.set_title(f'{self.file_name.capitalize()} Sample Grid at Iteration {iteration}')
         with open(f'{self.file_name}_step_{iteration}.json') as f:
@@ -53,8 +60,7 @@ class Visualiser:
 
             paths = sample_grid_obj['paths']
             for path in paths:
-                for p in path[1]:
-                    self.ax.plot([path[0][0], p[0][0]], [path[0][1], p[0][1]], c=viridis(p[1]), linewidth=4)
+                self.ax.scatter(path[0][0], path[0][1], color=viridis(path[1]), s=200*path[1])
 
             if self.goal:
                 self.ax.scatter(self.goal[0], self.goal[1], color=viridis1, s=200, marker='s')
@@ -79,14 +85,13 @@ class Visualiser:
 
     def visualise_final_path(self):
         """
-        Visualise the file_final_path.json file
+        Visualise the file_final_path.json file. The final path is represented as a edge list.
         """
         self.ax.set_title(f'{self.file_name.capitalize()} Final Path')
         self.visualise_start_end()
         with open(f'{self.file_name}_final_path.json') as f:
-            for path in json_load(f)['path']:
-                for p in path[1]:
-                    self.ax.plot([path[0][0], p[0][0]], [path[0][1], p[0][1]], c=viridis(p[1]), linewidth=4)
+            for edge in json_load(f)['path']:
+                self.ax.plot([edge[0][0][0], edge[0][1][0]], [edge[0][0][1], edge[0][1][1]], c=viridis(edge[1]), linewidth=4)
 
     def visualise_all(self, labels: bool = True, limit: int = 1000):
         """
@@ -99,7 +104,7 @@ class Visualiser:
         for i in range(1, limit+1):
             self.visualise_ground_truth()
             try:
-                self.visualise_sample_grid(i, labels)
+                self.visualise_samplestar(i, labels)
             except FileNotFoundError: break
             plt.savefig(f'{self.file_name}_step_{i}.png')
             self.ax.cla()
@@ -119,7 +124,7 @@ def main():
     v = Visualiser(args.file_name)
     if args.visualise_specific:
         v.visualise_ground_truth()
-        v.visualise_sample_grid(args.visualise_specific, args.labels)
+        v.visualise_samplestar(args.visualise_specific, args.labels)
         plt.show()
     else:
         v.visualise_all(args.labels, args.limit)

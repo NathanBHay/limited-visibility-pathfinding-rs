@@ -13,6 +13,7 @@ mod maps;
 mod search;
 mod util;
 
+// Goal to Improve 6s for 50 & 30-35 for 200
 fn main() {
     let (file, start, goal) = maps::LAK;
     let new_from_file = SampleGrid::new_from_file(file);
@@ -41,7 +42,7 @@ fn main() {
             break;
         }
         visualiser.visualise_iteration(
-            &samplestar.grid,
+            None,
             i,
             Some(samplestar.previous.clone()),
             Some(samplestar.current.clone()),
@@ -50,4 +51,14 @@ fn main() {
         );
     }
     visualiser.visualise_final_path(&samplestar.final_path);
+}
+
+#[test]
+fn test_env() {
+    use std::thread::available_parallelism;
+    println!(
+        "Available Parallelism: {}",
+        available_parallelism().unwrap()
+    );
+    assert!(false);
 }

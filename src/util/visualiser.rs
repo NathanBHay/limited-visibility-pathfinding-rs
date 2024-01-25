@@ -1,13 +1,18 @@
+//! Visualiser tool for visualising `Sample Star` algorithm.
+//!
+//! Future optimisation could be to output in BinCode format as it is interpertable by python.
+//! This would allow for faster output of the data. Another approac
 use serde_json::json;
-use std::{collections::HashMap, fs::File};
-
-use crate::domains::neighbors;
-use crate::domains::{
-    adjacencylist::AdjacencyList, bitpackedgrid::BitPackedGrid, samplegrid::SampleGrid,
+use std::{
+    collections::HashMap,
+    fs::File,
+    io::{BufWriter, Write},
 };
 
-/// Visualiser tool for `SampleGrid`
-///
+use crate::domains::{bitpackedgrid::BitPackedGrid, samplegrid::SampleGrid};
+
+/// Visualiser tool for visualising `Sample Star` algorithm.
+/// Outputs to JSON format for use with the python visualiser.
 pub struct Visualiser {
     file_path: String,
     start: Option<(usize, usize)>,
@@ -45,7 +50,7 @@ impl Visualiser {
             "goal": self.goal,
         });
         let mut file = File::create(format!("{}_ground_truth.json", self.file_path)).unwrap();
-        serde_json::to_writer_pretty(&mut file, &ground_truth).unwrap();
+        serde_json::to_writer(&mut file, &ground_truth).unwrap();
     }
 
     /// Visualise the current state of the grid and found paths
@@ -62,24 +67,31 @@ impl Visualiser {
             "sample_grid": get_sample_grid(sample_grid),
             "current": current,
             "next": next,
-            "paths": hashmap_to_adjlist(paths).iter().collect::<Vec<_>>(),
+            "paths": create_pathlist(paths),
             "stats": stats,
         });
-        let mut file = File::create(format!("{}_step_{}.json", self.file_path, iteration)).unwrap();
-        serde_json::to_writer_pretty(&mut file, &sample_grid).unwrap();
+        let mut file = BufWriter::new(
+            File::create(format!("{}_step_{}.json", self.file_path, iteration)).unwrap(),
+        );
+        serde_json::to_writer(&mut file, &sample_grid).unwrap();
+        let _ = file.flush();
     }
 
     /// Visualise the final path found by the algorithm
     pub fn visualise_final_path(&self, final_path: &Vec<(usize, usize)>) {
         let mut paths = HashMap::new();
-        for node in final_path {
-            *paths.entry(*node).or_insert(0) += 1;
+        for i in 0..final_path.len() - 1 {
+            let node = (
+                final_path[i].min(final_path[i + 1]),
+                final_path[i].max(final_path[i + 1]),
+            );
+            *paths.entry(node).or_insert(0) += 1;
         }
         let sample_grid = json!({
-            "path": hashmap_to_adjlist(&paths).iter().collect::<Vec<_>>(),
+            "path": create_pathlist(&paths),
         });
         let mut file = File::create(format!("{}_final_path.json", self.file_path)).unwrap();
-        serde_json::to_writer_pretty(&mut file, &sample_grid).unwrap();
+        serde_json::to_writer(&mut file, &sample_grid).unwrap();
     }
 }
 
@@ -87,6 +99,7 @@ fn get_sample_grid(grid: Option<&SampleGrid>) -> Vec<Vec<f32>> {
     match grid {
         Some(grid) => {
             // TODO: Optimize this to copy directly from the grid
+            // Do this by changing python code to accept a array and format it using w & h
             let mut sample_grid = vec![vec![0.0; grid.height]; grid.width];
             for x in 0..grid.width {
                 for y in 0..grid.height {
@@ -99,24 +112,9 @@ fn get_sample_grid(grid: Option<&SampleGrid>) -> Vec<Vec<f32>> {
     }
 }
 
-fn hashmap_to_adjlist(map: &HashMap<(usize, usize), usize>) -> AdjacencyList<(usize, usize), f32> {
-    let mut adjlist = AdjacencyList::new();
-    let mut max = 0;
-    for ((x, y), w) in map.iter() {
-        adjlist.add_node((*x, *y));
-        for (dest_x, dest_y) in neighbors(*x, *y, false) {
-            if let Some(dest_w) = map.get(&(dest_x, dest_y)) {
-                adjlist.add_edge((*x, *y), (dest_x, dest_y), *w.min(dest_w) as f32);
-                if *w > max {
-                    max = *w;
-                }
-            }
-        }
-    }
-    for node in adjlist.iter_mut() {
-        for (_, w) in node.iter_mut() {
-            *w = *w / max as f32;
-        }
-    }
-    adjlist
+fn create_pathlist<K: Clone>(map: &HashMap<K, usize>) -> Vec<(K, f32)> {
+    let max = map.iter().map(|(_, w)| *w).max().unwrap() as f32;
+    map.iter()
+        .map(|(k, w)| (k.clone(), *w as f32 / max))
+        .collect()
 }

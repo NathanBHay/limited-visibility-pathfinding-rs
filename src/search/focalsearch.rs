@@ -59,7 +59,6 @@ pub fn focal_search<E, I, C, N, G, H1, H2, F>(
     mut expander: E,
     start: N,
     goal: G,
-    // mut expanded_nodes: Option<&mut HashSet<N>>,
     heuristic: H1,
     focal_heuristic: H2,
     focal_calc: F,
@@ -92,9 +91,6 @@ where
         cost: (fcost, hcost),
     }) = focal.pop()
     {
-        // if let Some(expanded_nodes) = expanded_nodes.as_mut() {
-        // expanded_nodes.insert(node.clone());
-        // }
         if goal(&node) {
             return Some(reconstruct_path_with_cost(previous, node.clone()));
         }
@@ -203,8 +199,3 @@ mod test {
         );
     }
 }
-// ee...\n
-// e###.\n
-// e#eee\n
-// e#e#.\n
-// eee#.
