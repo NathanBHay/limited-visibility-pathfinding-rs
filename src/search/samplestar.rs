@@ -81,16 +81,13 @@ impl SampleStar {
                 |_| 0,
                 |n| *n,
             ) {
-                self.path_store.lock().unwrap().add_path(Box::new(path.into_iter()), weight);
+                self.path_store.lock().unwrap().add_path(path, weight);
             }
         });
         self.previous = self.current;
-        let adj: Box<dyn Iterator<Item = (usize, usize)>> = Box::new(
-            self.grid
-                .adjacent(self.current, false)
-                .collect::<Vec<_>>()
-                .into_iter(),
-        );
+        let adj = self.grid
+            .adjacent(self.current, false)
+            .collect::<Vec<_>>();
         self.current = self.path_store.lock().unwrap().next_node(adj).unwrap_or(self.current);
         self.final_path.push(self.current);
         false

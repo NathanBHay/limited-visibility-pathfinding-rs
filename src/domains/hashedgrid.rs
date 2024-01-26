@@ -5,7 +5,7 @@
 
 use std::{collections::HashSet, fs::read_to_string};
 
-use super::{create_map_from_string, neighbors, plot_cells, print_cells};
+use super::{create_map_from_string, neighbors, print_cells};
 
 /// A grid map whoch uses a hashset of obstacles to represent obstacles
 /// This is the simplest grid map implementation
@@ -109,30 +109,6 @@ impl HashedGrid {
             self.height,
             |x, y| self.get_map_value(x, y),
             Some(path),
-        )
-    }
-
-    /// Plots the grid map on a plotters canvas, outputs to filename
-    pub fn plot_cells(&self, filename: &str, path: Vec<(usize, usize)>) {
-        plot_cells(
-            self.width,
-            self.height,
-            filename,
-            |x, y| self.get_map_value(x, y),
-            Some(path),
-            None,
-        )
-    }
-
-    /// Plots the grid map on a plotters canvas, outputs to filename
-    pub fn plot_cells_with_heatmap(&self, filename: &str, heatmap: Vec<((usize, usize), f64)>) {
-        plot_cells(
-            self.width,
-            self.height,
-            filename,
-            |x, y| self.get_map_value(x, y),
-            None,
-            Some(heatmap),
         )
     }
 }

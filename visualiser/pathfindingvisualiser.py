@@ -11,18 +11,24 @@ import numpy as np
 from json import load as json_load
 from matplotlib.cm import viridis, Greys
 import argparse
+import time
 
 viridis = viridis(np.linspace(0, 1, 256))
 viridis[0, :] = 0  # Make the 0 value fully transparent
 viridis = ListedColormap(viridis)
 viridis1 = viridis(1.0)
+node_size = 100
 
 class Visualiser:
     def __init__(self, file_name: str) -> None:
         self.file_name = file_name
-        _, self.ax = plt.subplots()
+        self.figure, self.ax = plt.subplots()
         self.goal = None
         self.dims = (0, 0)
+        with open(f'{self.file_name}_ground_truth.json') as f:
+            ground_truth = json_load(f)
+            self.dims = np.array(ground_truth['grid']).shape[::-1]
+            self.ax.set_aspect('equal')
 
     def visualise_start_end(self):
         """
@@ -32,10 +38,10 @@ class Visualiser:
         with open(f'{self.file_name}_ground_truth.json') as f:
             ground_truth = json_load(f)
             if start := ground_truth['start']:
-                self.ax.scatter(start[0], start[1], color=viridis1, s=200)
+                self.ax.scatter(start[0], self.dims[0] - start[1], color=viridis1, s=node_size)
             self.goal = ground_truth['goal']
             if self.goal:
-                self.ax.scatter(self.goal[0], self.goal[1], color=viridis1, s=200, marker='s')
+                self.ax.scatter(self.goal[0], self.dims[0] - self.goal[1], color=viridis1, s=node_size, marker='s')
 
     def visualise_ground_truth(self):
         """
@@ -45,8 +51,7 @@ class Visualiser:
         with open(f'{self.file_name}_ground_truth.json') as f:
             ground_truth = json_load(f)
             ground_truth = np.array(ground_truth['grid']).astype(bool).transpose()
-            self.dims = ground_truth.shape
-            self.ax.imshow(ground_truth, cmap='gray')
+            self.ax.imshow(ground_truth, cmap='gray', extent=[0, self.dims[1], 0, self.dims[0]])
 
     def visualise_samplestar(self, iteration: int, labels: bool):
         """
@@ -68,13 +73,13 @@ class Visualiser:
             path_counts = np.zeros(self.dims)
             for path in paths:
                 path_counts[path[0][1], path[0][0]] = path[1]
-            self.ax.imshow(path_counts, cmap=viridis, interpolation='nearest', alpha=0.5)
+            self.ax.imshow(path_counts, cmap=viridis, interpolation='nearest', alpha=0.5, extent=[0, self.dims[1], 0, self.dims[0]])
 
             if self.goal:
-                self.ax.scatter(self.goal[0], self.goal[1], color=viridis1, s=200, marker='s')
+                self.ax.scatter(self.goal[0], self.dims[0] - self.goal[1], color=viridis1, s=node_size, marker='s')
 
             if current := sample_grid_obj['current']:
-                self.ax.scatter(current[0], current[1], color=viridis1, s=200)
+                self.ax.scatter(current[0], self.dims[0] - current[1], color=viridis1, s=node_size)
 
             if next := sample_grid_obj['next']:
                 marker = '*'
@@ -85,7 +90,7 @@ class Visualiser:
                     elif diff == (0, 1): marker = 'v'
                     elif diff == (1, 0): marker = '>'
                     elif diff == (-1, 0): marker = '<'
-                self.ax.scatter(next[0], next[1], color=viridis1, s=200, marker=marker)
+                self.ax.scatter(next[0], self.dims[0] - next[1], color=viridis1, s=node_size, marker=marker)
 
             if stats := sample_grid_obj['stats']:
                 for stat in stats:
@@ -99,7 +104,7 @@ class Visualiser:
         self.visualise_start_end()
         with open(f'{self.file_name}_final_path.json') as f:
             for edge in json_load(f)['path']:
-                self.ax.plot([edge[0][0][0], edge[0][1][0]], [edge[0][0][1], edge[0][1][1]], c=viridis(edge[1]), linewidth=4)
+                self.ax.plot([edge[0][0][0], edge[0][1][0]], [self.dims[0] - edge[0][0][1], self.dims[0] - edge[0][1][1]], c=viridis(edge[1]), linewidth=4)
 
     def visualise_all(self, labels: bool = True, limit: int = 1000):
         """
@@ -129,6 +134,7 @@ def main():
     parser.add_argument('-l', '--labels', type=bool, default=False, help='Whether to show labels on the sample grid')
     parser.add_argument('-i', '--limit', type=int, default=1000, help='The maximum number of steps to visualise')
     args = parser.parse_args()
+    start_time = time.time()
     v = Visualiser(args.file_name)
     if args.visualise_specific:
         v.visualise_ground_truth()
@@ -136,6 +142,7 @@ def main():
         plt.show()
     else:
         v.visualise_all(args.labels, args.limit)
+    print(f'Time taken: {time.time() - start_time}s')
 
 if __name__ == '__main__':
     main()

@@ -14,13 +14,13 @@ pub trait PathStore<N: Send, W: Send>: Send {
     fn reinitialize(&mut self) {}
 
     /// Add a path to the store's internal data structure
-    fn add_path(&mut self, path: Box<dyn Iterator<Item = N>>, weight: W);
+    fn add_path(&mut self, path: Vec<N>, weight: W);
 
     /// Remove a path from the store's internal data structure
     // fn remove_path(&mut self, path: &Vec<(usize, usize)>);
 
     /// Get the best node to explore next, reaturns none if no node is found
-    fn next_node(&self, nodes: Box<dyn Iterator<Item = N>>) -> Option<N>;
+    fn next_node(&self, nodes: Vec<N>) -> Option<N>;
 
     /// Check if node is in store
     fn contains(&self, node: &N) -> bool;
@@ -54,15 +54,15 @@ where
         self.store.clear();
     }
 
-    fn add_path(&mut self, path: Box<dyn Iterator<Item = N>>, weight: W) {
+    fn add_path(&mut self, path: Vec<N>, weight: W) {
         for node in path {
             let entry = self.store.entry(node).or_insert(W::default());
             *entry = entry.clone() + (self.heuristic)(&weight);
         }
     }
 
-    fn next_node(&self, nodes: Box<dyn Iterator<Item = N>>) -> Option<N> {
-        nodes
+    fn next_node(&self, nodes: Vec<N>) -> Option<N> {
+        nodes.into_iter()
             .filter(|n| self.contains(n))
             .max_by_key(|n| self.store.get(n).unwrap())
     }

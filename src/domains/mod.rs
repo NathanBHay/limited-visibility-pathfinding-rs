@@ -12,8 +12,6 @@ pub mod edgelist;
 pub mod hashedgrid;
 pub mod samplegrid;
 
-use plotters::{prelude::*, style::Color};
-
 /// A helper function that creates a map from a string given functions
 /// to initialize the map and add obstacles
 /// ## Arguments
@@ -95,58 +93,6 @@ pub fn print_points(cells: Vec<(usize, usize)>) -> String {
         |x, y| cells.contains(&(x + width_min, y + height_min)),
         None,
     )
-}
-
-/// Helper function to plot the cells on a plotter backend
-/// ## Arguments
-/// * `width` - The width of the map
-/// * `height` - The height of the map
-/// * `output_file` - The output file to save the plot to
-/// * `get_cell_value` - A function that returns the value of a cell given its x, y coordinates,
-/// true if the cell is free and false if it is an obstacle
-/// * `path` - An optional path to plot on the map
-/// * `heatmap` - An optional heatmap to plot on the map
-pub(crate) fn plot_cells(
-    width: usize,
-    height: usize,
-    output_file: &str,
-    get_cell_value: impl Fn(usize, usize) -> bool,
-    path: Option<Vec<(usize, usize)>>,
-    heatmap: Option<Vec<((usize, usize), f64)>>,
-) {
-    let root = BitMapBackend::new(output_file, (width as u32, height as u32)).into_drawing_area();
-    root.fill(&WHITE).unwrap();
-    let mut chart = ChartBuilder::on(&root)
-        .margin(5)
-        .build_cartesian_2d(0..width as i32, 0..height as i32)
-        .unwrap();
-    chart.configure_mesh().disable_mesh().draw().unwrap();
-
-    // Draw obstacles, will draw a rectangle for each cell that is an obstacle (is)
-    let series = (0..width)
-        .flat_map(|x| (0..height).map(move |y| (x, y)))
-        .filter(|(x, y)| !get_cell_value(x.clone(), y.clone()))
-        .map(|(x, y)| (x as i32, (height - y) as i32))
-        .map(|(x, y)| Rectangle::new([(x, y), (x, y)], &BLACK));
-    chart.draw_series(series).expect("Unable to draw obstacles");
-
-    // Draw Heatmap of paths of values
-    if let Some(heatmap) = heatmap {
-        let heatmap = heatmap
-            .iter()
-            .map(|((x, y), color)| (*x as i32, (height - *y) as i32, *color))
-            .map(|(x, y, color)| Rectangle::new([(x, y), (x, y)], &BLUE.mix(color)));
-        chart.draw_series(heatmap).unwrap();
-    }
-
-    // Draw path
-    if let Some(path) = path {
-        let path = path
-            .iter()
-            .map(|(x, y)| (*x as i32, (height - *y) as i32))
-            .map(|(x, y)| Rectangle::new([(x, y), (x, y)], &RED));
-        chart.draw_series(path).unwrap();
-    }
 }
 
 /// Helper function to get a iterator of the neighbors of a cell

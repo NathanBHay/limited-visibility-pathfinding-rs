@@ -12,7 +12,7 @@
 
 use std::vec;
 
-use super::{create_map_from_string, neighbors, plot_cells, print_cells};
+use super::{create_map_from_string, neighbors, print_cells};
 
 /// A grid of bits packed into usize-bit words
 #[derive(Clone, Debug)]
@@ -111,6 +111,14 @@ impl BitPackedGrid {
         (x, y)
     }
 
+    /// Get the number of 1s in the grid
+    pub fn count_1s(&self) -> usize {
+        self.map_cells
+            .iter()
+            .map(|word| word.count_ones() as usize)
+            .sum()
+    }
+
     /// Prints the grid map where . is a free cell and @ is an obstacle
     pub fn print_cells(&self, path: Option<Vec<(usize, usize)>>) -> String {
         print_cells(
@@ -135,22 +143,6 @@ impl BitPackedGrid {
         (x, y): (usize, usize),
     ) -> impl Iterator<Item = ((usize, usize), usize)> + '_ {
         self.adjacent((x, y), false).map(|n| (n, 1))
-    }
-
-    pub fn plot_cells(
-        &self,
-        filename: &str,
-        path: Option<Vec<(usize, usize)>>,
-        heatmap: Option<Vec<((usize, usize), f64)>>,
-    ) {
-        plot_cells(
-            self.original_width,
-            self.original_height,
-            filename,
-            |x, y| self.get_bit_value((x, y)),
-            path,
-            heatmap,
-        )
     }
 }
 

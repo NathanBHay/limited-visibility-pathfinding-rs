@@ -1,5 +1,5 @@
 use super::bitpackedgrid::BitPackedGrid;
-use super::{create_map_from_string, plot_cells, print_cells};
+use super::{create_map_from_string, print_cells};
 use crate::fov::fieldofvision::raycast_matrix;
 use crate::matrix;
 use crate::util::filter::KalmanNode;
@@ -244,23 +244,6 @@ impl SampleGrid {
             self.height,
             |x, y| self.sample_grid[x][y].state != 0.0,
             path,
-        )
-    }
-
-    /// Plots the sampling cell grid for debugging
-    pub fn plot_sampling_cells(
-        &self,
-        output_file: &str,
-        path: Option<Vec<(usize, usize)>>,
-        heatmap: Option<Vec<((usize, usize), f64)>>,
-    ) {
-        plot_cells(
-            self.width,
-            self.height,
-            output_file,
-            |x, y| self.sample_grid[x][y].state != 0.0,
-            path,
-            heatmap,
         )
     }
 }
