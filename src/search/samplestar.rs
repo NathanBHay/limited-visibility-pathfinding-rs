@@ -7,6 +7,9 @@
 //! Heuristics could include ones that take into account probability of being an obstacle:
 //! `self.grid.sample_grid[x][y].state * manhattan_distance(n*, self.goal)`
 
+use std::sync::{Arc, Mutex};
+use rayon::prelude::*;
+
 use crate::{
     domains::{bitpackedgrid::BitPackedGrid, samplegrid::SampleGrid},
     heuristics::distance::manhattan_distance,
@@ -32,7 +35,7 @@ pub struct SampleStar {
     epoch: usize,
     kernel: Matrix<f32>,
     pub final_path: Vec<(usize, usize)>,
-    pub path_store: PathStoreT,
+    pub path_store: Arc<Mutex<PathStoreT>>,
 }
 
 impl SampleStar {
@@ -54,7 +57,7 @@ impl SampleStar {
             epoch,
             kernel,
             final_path: vec![start],
-            path_store,
+            path_store: Arc::new(Mutex::new(path_store)),
         }
     }
 
@@ -63,9 +66,11 @@ impl SampleStar {
         if self.current == self.goal {
             return true;
         }
-        self.path_store.reinitialize();
+        {
+            self.path_store.lock().unwrap().reinitialize();
+        }
         self.grid.raycast_update(self.current, &self.kernel);
-        for _ in 0..self.epoch {
+        (0..self.epoch).into_par_iter().for_each(|_| {
             let mut gridmap = BitPackedGrid::new(self.grid.width, self.grid.height);
             let mut sampled_before = gridmap.clone();
             if let Some((path, weight)) = focal_search(
@@ -76,9 +81,9 @@ impl SampleStar {
                 |_| 0,
                 |n| *n,
             ) {
-                self.path_store.add_path(Box::new(path.into_iter()), weight);
+                self.path_store.lock().unwrap().add_path(Box::new(path.into_iter()), weight);
             }
-        }
+        });
         self.previous = self.current;
         let adj: Box<dyn Iterator<Item = (usize, usize)>> = Box::new(
             self.grid
@@ -86,7 +91,7 @@ impl SampleStar {
                 .collect::<Vec<_>>()
                 .into_iter(),
         );
-        self.current = self.path_store.next_node(adj).unwrap_or(self.current);
+        self.current = self.path_store.lock().unwrap().next_node(adj).unwrap_or(self.current);
         self.final_path.push(self.current);
         false
     }
@@ -110,9 +115,3 @@ impl SampleStar {
     const D: f32 = Self::Z / Self::MARGIN_OF_ERROR;
     const DESIGN_EFFECT: f32 = Self::D * Self::D;
 }
-
-/*
-Premade Sample Strategies
-|grid, _, _| grid.sample_all()
-|grid, current, radius| grid.sample_radius(current, radius)
-*/

@@ -6,8 +6,9 @@
 use std::{cmp::Ord, collections::HashMap, hash::Hash, ops::Add};
 
 /// PathStore is a trait that defines the interface for storing multiple paths
-/// as to be able to find most commomly taken paths.
-pub trait PathStore<N, W> {
+/// as to be able to find most commomly taken paths. `Send` is required to allow
+/// for the store to be used in parallel.
+pub trait PathStore<N: Send, W: Send>: Send {
     /// Reinitialize the store at the start of a new search,
     /// optional as some stores may not need to be reinitialized
     fn reinitialize(&mut self) {}
@@ -30,13 +31,13 @@ pub trait PathStore<N, W> {
 
 /// A store which accumulates the number of times a node has been visited,
 /// using a heuristic to weight the value of each visit
-pub struct AccStore<N: Eq + Hash, W> {
+pub struct AccStore<N: Eq + Hash + Send, W: Send> {
     store: HashMap<N, W>,
-    heuristic: Box<dyn Fn(&W) -> W>,
+    heuristic: Box<dyn Fn(&W) -> W + Send>,
 }
 
-impl<N: Eq + Hash, W> AccStore<N, W> {
-    pub fn new(heuristic: Box<dyn Fn(&W) -> W>) -> Self {
+impl<N: Eq + Hash + Send, W: Send> AccStore<N, W> {
+    pub fn new(heuristic: Box<dyn Fn(&W) -> W + Send>) -> Self {
         Self {
             store: HashMap::new(),
             heuristic,
@@ -44,7 +45,11 @@ impl<N: Eq + Hash, W> AccStore<N, W> {
     }
 }
 
-impl<N: Eq + Hash, W: Add<Output = W> + Clone + Default + Ord> PathStore<N, W> for AccStore<N, W> {
+impl<N, W> PathStore<N, W> for AccStore<N, W> 
+where
+    N: Eq + Hash + Send,
+    W: Add<Output = W> + Clone + Default + Ord + Send
+{
     fn reinitialize(&mut self) {
         self.store.clear();
     }
@@ -71,7 +76,7 @@ impl<N: Eq + Hash, W: Add<Output = W> + Clone + Default + Ord> PathStore<N, W> f
     }
 }
 
-impl<N: Eq + Hash> AccStore<N, usize> {
+impl<N: Eq + Hash + Send> AccStore<N, usize> {
     /// Create a Acc Store that counts the number of times a node has been visited
     pub fn new_count_store() -> Self {
         AccStore::new(Box::new(|_| 1))

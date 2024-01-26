@@ -5,6 +5,7 @@ use util::{
     matrix::{gaussian_kernal, gaussian_kernel_rev},
     visualiser::Visualiser,
 };
+use std::time::Instant;
 
 mod domains;
 mod fov;
@@ -15,7 +16,8 @@ mod util;
 
 // Goal to Improve 6s for 50 & 30-35 for 200
 fn main() {
-    let (file, start, goal) = maps::WALL;
+    let now = Instant::now();
+    let (file, start, goal) = maps::LAK;
     let new_from_file = SampleGrid::new_from_file(file);
     let mut grid = new_from_file;
     grid.blur_samplegrid(&gaussian_kernal(5, 1.0));
@@ -40,11 +42,12 @@ fn main() {
             i,
             Some(samplestar.previous.clone()),
             Some(samplestar.current.clone()),
-            samplestar.path_store.get_paths(),
+            samplestar.path_store.lock().unwrap().get_paths(),
             None,
         );
     }
     visualiser.visualise_final_path(&samplestar.final_path);
+    println!("Time Taken: {}s", now.elapsed().as_secs_f32());
 }
 
 #[test]
