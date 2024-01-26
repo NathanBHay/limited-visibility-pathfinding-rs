@@ -5,12 +5,16 @@ This could be optimised in the future with a faster json parser, or a faster
 visualisation library.
 """
 
+from matplotlib.colors import ListedColormap
 import matplotlib.pyplot as plt
 import numpy as np
 from json import load as json_load
 from matplotlib.cm import viridis, Greys
 import argparse
 
+viridis = viridis(np.linspace(0, 1, 256))
+viridis[0, :] = 0  # Make the 0 value fully transparent
+viridis = ListedColormap(viridis)
 viridis1 = viridis(1.0)
 
 class Visualiser:
@@ -18,6 +22,7 @@ class Visualiser:
         self.file_name = file_name
         _, self.ax = plt.subplots()
         self.goal = None
+        self.dims = (0, 0)
 
     def visualise_start_end(self):
         """
@@ -40,9 +45,10 @@ class Visualiser:
         with open(f'{self.file_name}_ground_truth.json') as f:
             ground_truth = json_load(f)
             ground_truth = np.array(ground_truth['grid']).astype(bool).transpose()
+            self.dims = ground_truth.shape
             self.ax.imshow(ground_truth, cmap='gray')
 
-    def visualise_samplestar(self, iteration: int, labels: bool = True):
+    def visualise_samplestar(self, iteration: int, labels: bool):
         """
         Visualise the file_sample_grid.json file. The sample grid itself is represented
         as a 2d array. The paths are just a series of points with a count of how many
@@ -59,8 +65,10 @@ class Visualiser:
                         self.ax.text(i, j, round(sample_grid[i, j], 3), ha="center", va="center", color=Greys(sample_grid[i, j]))
 
             paths = sample_grid_obj['paths']
+            path_counts = np.zeros(self.dims)
             for path in paths:
-                self.ax.scatter(path[0][0], path[0][1], color=viridis(path[1]), s=200*path[1])
+                path_counts[path[0][1], path[0][0]] = path[1]
+            self.ax.imshow(path_counts, cmap=viridis, interpolation='nearest', alpha=0.5)
 
             if self.goal:
                 self.ax.scatter(self.goal[0], self.goal[1], color=viridis1, s=200, marker='s')
