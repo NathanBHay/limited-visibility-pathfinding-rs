@@ -1,6 +1,6 @@
 use domains::samplegrid::SampleGrid;
 use search::pathstore::AccStore;
-use search::samplestar::{PathStoreT, SampleStar, SampleStratT};
+use search::samplestar::{PathStoreT, SampleStar};
 use util::{
     matrix::{gaussian_kernal, gaussian_kernel_rev},
     visualiser::Visualiser,
@@ -15,17 +15,12 @@ mod util;
 
 // Goal to Improve 6s for 50 & 30-35 for 200
 fn main() {
-    let (file, start, goal) = maps::LAK;
+    let (file, start, goal) = maps::WALL;
     let new_from_file = SampleGrid::new_from_file(file);
     let mut grid = new_from_file;
     grid.blur_samplegrid(&gaussian_kernal(5, 1.0));
     let new_count_store = AccStore::new_count_store();
     let path_store: PathStoreT = Box::new(new_count_store);
-    let sample_strat: SampleStratT = Box::new(
-        |grid: &mut SampleGrid, current: (usize, usize), radius: usize| {
-            grid.sample_radius(current, radius)
-        },
-    );
     let mut samplestar = SampleStar::new(
         grid,
         start,
@@ -33,7 +28,6 @@ fn main() {
         10,
         gaussian_kernel_rev(5, 1.0),
         path_store,
-        sample_strat,
     );
     let visualiser = Visualiser::new("test", &samplestar.grid, Some(start), Some(goal));
 

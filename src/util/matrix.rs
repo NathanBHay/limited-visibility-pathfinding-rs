@@ -107,6 +107,7 @@ where
     result
 }
 
+#[allow(dead_code)]
 /// Resolution method for resolving the value of a matrix at the edges.
 pub enum ConvResolve<T: Clone> {
     /// Fill the matrix with the given value. |T T T|a b c|T T T|

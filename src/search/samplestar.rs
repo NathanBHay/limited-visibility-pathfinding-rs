@@ -8,14 +8,13 @@
 //! `self.grid.sample_grid[x][y].state * manhattan_distance(n*, self.goal)`
 
 use crate::{
-    domains::samplegrid::SampleGrid,
+    domains::{bitpackedgrid::BitPackedGrid, samplegrid::SampleGrid},
     heuristics::distance::manhattan_distance,
     util::{filter::KalmanNode, matrix::Matrix},
 };
 
 use super::{focalsearch::focal_search, pathstore::PathStore};
 
-pub type SampleStratT = Box<dyn FnMut(&mut SampleGrid, (usize, usize), usize)>;
 pub type PathStoreT = Box<dyn PathStore<(usize, usize), usize>>;
 
 /// Sample Star Algorithm
@@ -34,7 +33,6 @@ pub struct SampleStar {
     kernel: Matrix<f32>,
     pub final_path: Vec<(usize, usize)>,
     pub path_store: PathStoreT,
-    sample_stategy: SampleStratT,
 }
 
 impl SampleStar {
@@ -46,7 +44,6 @@ impl SampleStar {
         epoch: usize,
         kernel: Matrix<f32>,
         path_store: PathStoreT,
-        sample_stategy: SampleStratT,
     ) -> Self {
         assert!(grid.bound_check(start) && grid.bound_check(goal));
         Self {
@@ -58,7 +55,6 @@ impl SampleStar {
             kernel,
             final_path: vec![start],
             path_store,
-            sample_stategy,
         }
     }
 
@@ -68,14 +64,12 @@ impl SampleStar {
             return true;
         }
         self.path_store.reinitialize();
-        // let mut cached_paths = HashMap::new();
         self.grid.raycast_update(self.current, &self.kernel);
-        self.grid.init_gridmap_nearest(); // Currently more accurate than other methods
         for _ in 0..self.epoch {
-            // (self.sample_stategy)(&mut self.grid, self.current, self.kernel.width /
-            self.grid.init_sampled_before();
+            let mut gridmap = BitPackedGrid::new(self.grid.width, self.grid.height);
+            let mut sampled_before = gridmap.clone();
             if let Some((path, weight)) = focal_search(
-                |n| self.grid.sample_adjacenct(*n).collect::<Vec<_>>(),
+                |n| self.grid.sample_adjacenct(&mut gridmap, &mut sampled_before, *n),
                 self.current,
                 |n| *n == self.goal,
                 |n| manhattan_distance(*n, self.goal),

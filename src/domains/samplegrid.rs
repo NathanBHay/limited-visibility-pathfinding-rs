@@ -10,13 +10,6 @@ pub struct SampleGrid {
     /// It has a value between 0.0 and 1.0
     pub sample_grid: Matrix<KalmanNode>,
 
-    /// The bitpacked grid which represents sampled cells
-    /// TODO: This cam be simplified to a smaller sub grid
-    pub gridmap: BitPackedGrid,
-
-    /// Places where the grid has been sampled before
-    pub sampled_before: BitPackedGrid,
-
     /// The real values of the grid
     pub ground_truth: BitPackedGrid,
 
@@ -35,22 +28,17 @@ impl SampleGrid {
         let height = grid.width;
         let mut sample_grid = matrix![KalmanNode::default(); height, width];
         for y in 0..width {
-            // Swapped width and height here
+            // Swapped width and height here to match the matrix indexing
             for x in 0..height {
-                // to match the matrix indexing
                 sample_grid[x][y].state = grid[x][y];
             }
         }
-        let mut grid = SampleGrid {
+        SampleGrid {
             sample_grid,
-            gridmap: BitPackedGrid::new(width, height),
             ground_truth,
             width,
             height,
-            sampled_before: BitPackedGrid::new(width, height),
-        };
-        grid.init_gridmap();
-        grid
+        }
     }
 
     /// Creates a new sampling grid with a given size
@@ -58,11 +46,9 @@ impl SampleGrid {
         let node = KalmanNode::default();
         SampleGrid {
             sample_grid: matrix![node; height, width],
-            gridmap: BitPackedGrid::new(width, height),
             ground_truth: BitPackedGrid::new(width, height),
             width,
             height,
-            sampled_before: BitPackedGrid::new(width, height),
         }
     }
 
@@ -72,7 +58,6 @@ impl SampleGrid {
             grid.sample_grid[x][y].state = 1.0;
         });
         grid.init_ground_truth(); // These aren't good practice as they are an
-        grid.init_gridmap(); // weird side effect
         grid
     }
 
@@ -84,46 +69,23 @@ impl SampleGrid {
 
     /// Initializes an area of the bitfield from the sampling grid values, where
     /// 0.0 indicates a guaranteed obstacles and (0,1) indicates a probability
-    pub fn init_gridmap_area(&mut self, (x, y): (usize, usize), width: usize, height: usize) {
+    pub fn init_gridmap_area<'a>(&mut self, gridmap: &'a mut BitPackedGrid, (x, y): (usize, usize), width: usize, height: usize) {
         for x in x..x + width {
             for y in y..y + height {
-                self.gridmap
-                    .set_bit_value((x, y), self.sample_grid[x][y].state != 0.0);
-            }
-        }
-    }
-
-    /// Initializes the gridmap from the sampling grid using the `NEAREST_THRESHOLD``
-    pub fn init_gridmap_nearest(&mut self) {
-        for x in 0..self.width {
-            for y in 0..self.height {
-                self.gridmap.set_bit_value(
-                    (x, y),
-                    self.sample_grid[x][y].state > Self::NEAREST_THRESHOLD,
-                );
+                gridmap.set_bit_value((x, y), self.sample_grid[x][y].state != 0.0);
             }
         }
     }
 
     /// Initializes the gridmap from the sampling grid
-    pub fn init_gridmap_radius(&mut self, (x, y): (usize, usize), radius: usize) {
-        let radius = radius + 1;
-        let x_min = x.saturating_sub(radius);
-        let y_min = y.saturating_sub(radius);
-        let x_max = (x + radius).min(self.width);
-        let y_max = (y + radius).min(self.height);
-        self.init_gridmap_area((x_min, y_min), x_max - x_min, y_max - y_min);
+    pub fn init_gridmap_radius<'a>(&mut self, gridmap: &'a mut BitPackedGrid, (x, y): (usize, usize), radius: usize) {
+        let (n, width, height) = self.radius_calc((x, y), radius);
+        self.init_gridmap_area(gridmap, n, width, height);
     }
 
     /// Initializes the gridmap from the sampling grid
-    pub fn init_gridmap(&mut self) {
-        self.init_gridmap_area((0, 0), self.width, self.height);
-    }
-
-    /// Initialize the sampled before grid
-    pub fn init_sampled_before(&mut self) {
-        // TODO: Calculate a mask that does this slightly faster
-        self.sampled_before = BitPackedGrid::new(self.width, self.height)
+    pub fn init_gridmap<'a>(&mut self, gridmap: &'a mut BitPackedGrid) {
+        self.init_gridmap_area(gridmap, (0, 0), self.width, self.height);
     }
 
     /// Initializes the ground truth grid from the sampling grid
@@ -143,18 +105,18 @@ impl SampleGrid {
     }
 
     /// Samples a cell with a given chance
-    pub fn sample(&mut self, (x, y): (usize, usize)) -> bool {
+    pub fn sample<'a>(&self, gridmap: &'a mut BitPackedGrid, (x, y): (usize, usize)) -> bool {
         let value = self.sample_grid[x][y].state != 0.0
             && rand::random::<f32>() < self.sample_grid[x][y].state;
-        self.gridmap.set_bit_value((x, y), value);
+        gridmap.set_bit_value((x, y), value);
         value
     }
 
     /// Samples an area of the grid
-    pub fn sample_area(&mut self, (x, y): (usize, usize), width: usize, height: usize) {
+    pub fn sample_area<'a>(&self, gridmap: &'a mut BitPackedGrid, (x, y): (usize, usize), width: usize, height: usize) {
         for x in x..x + width {
             for y in y..y + height {
-                self.sample((x, y));
+                self.sample(gridmap, (x, y));
             }
         }
     }
@@ -174,14 +136,14 @@ impl SampleGrid {
     }
 
     /// Samples a cell with a given chance
-    pub fn sample_radius(&mut self, (x, y): (usize, usize), radius: usize) {
+    pub fn sample_radius<'a>(&self, gridmap: &'a mut BitPackedGrid, (x, y): (usize, usize), radius: usize) {
         let (n, width, height) = self.radius_calc((x, y), radius);
-        self.sample_area(n, width, height);
+        self.sample_area(gridmap, n, width, height);
     }
 
     /// Samples all cells in the grid
-    pub fn sample_all(&mut self) {
-        self.sample_area((0, 0), self.width, self.height)
+    pub fn sample_all<'a>(&self, gridmap: &'a mut BitPackedGrid) {
+        self.sample_area(gridmap, (0, 0), self.width, self.height)
     }
 
     /// Samples a cell with a given chance
@@ -257,19 +219,22 @@ impl SampleGrid {
     }
 
     /// Samples all adjacent cells on sampling grid
-    pub fn sample_adjacenct(
-        &mut self,
+    pub fn sample_adjacenct<'a>(
+        &self,
+        gridmap: &'a mut BitPackedGrid,
+        sampled_before: &'a mut BitPackedGrid,
         (x, y): (usize, usize),
-    ) -> impl Iterator<Item = ((usize, usize), usize)> + '_ {
+    ) -> Vec<((usize, usize), usize)> {
         super::neighbors(x, y, false)
             .filter(move |(x, y)| {
-                if self.bound_check((*x, *y)) && !self.sampled_before.get_bit_value((*x, *y)) {
-                    self.sample((*x, *y))
+                if self.bound_check((*x, *y)) && !sampled_before.get_bit_value((*x, *y)) {
+                    self.sample(gridmap, (*x, *y))
                 } else {
-                    self.gridmap.get_bit_value((*x, *y))
+                    gridmap.get_bit_value((*x, *y))
                 }
             })
             .map(|n| (n, 1))
+            .collect()
     }
 
     /// Prints the sampling cell grid for debugging
@@ -325,9 +290,6 @@ mod tests {
             SampleGrid::new_from_grid(matrix![[0.0, 1.0], [1.0, 0.0]], BitPackedGrid::new(2, 2));
         assert_eq!(grid.sample_grid[0][0].state, 0.0);
         assert_eq!(grid.sample_grid[1][0].state, 1.0);
-        assert_eq!(grid.gridmap.get_bit_value((0, 0)), false);
-        assert_eq!(grid.gridmap.get_bit_value((1, 0)), true);
-        assert_eq!(grid.gridmap.get_bit_value((0, 1)), true);
     }
 
     #[test]
@@ -338,23 +300,20 @@ mod tests {
         assert_eq!(grid.sample_grid[0][0].state, 1.0);
         assert_eq!(grid.sample_grid[1][0].state, 1.0);
         assert_eq!(grid.sample_grid[0][1].state, 0.0);
-        assert_eq!(grid.gridmap.get_bit_value((0, 0)), true);
-        assert_eq!(grid.gridmap.get_bit_value((1, 0)), true);
-        assert_eq!(grid.gridmap.get_bit_value((0, 1)), false);
     }
 
     #[test]
     fn test_gridmap_init() {
         let mut grid = SampleGrid::new_from_string("@....\n.....\n.....\n.....\n".to_string());
-        grid.gridmap = BitPackedGrid::new(grid.width, grid.height);
-        grid.init_gridmap_radius((0, 0), 2);
+        let mut gridmap = BitPackedGrid::new(grid.width, grid.height);
+        grid.init_gridmap_radius(&mut gridmap, (0, 0), 2);
         grid.init_ground_truth();
         assert_eq!(
             grid.ground_truth.print_cells(None),
             "@....\n.....\n.....\n.....\n"
         );
         assert_eq!(
-            grid.gridmap.print_cells(None),
+            gridmap.print_cells(None),
             "@..@@\n...@@\n...@@\n@@@@@\n"
         );
     }

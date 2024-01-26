@@ -15,7 +15,7 @@ use std::vec;
 use super::{create_map_from_string, neighbors, plot_cells, print_cells};
 
 /// A grid of bits packed into usize-bit words
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct BitPackedGrid {
     pub original_height: usize,
     pub original_width: usize,
