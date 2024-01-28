@@ -27,6 +27,9 @@ pub trait PathStore<N: Send, W: Send>: Send {
 
     /// Get the store's possible paths
     fn get_paths(&self) -> &HashMap<N, W>;
+
+    /// Get the weight of a given node
+    fn get(&self, node: &N) -> Option<&W>;
 }
 
 /// A store which accumulates the number of times a node has been visited,
@@ -73,6 +76,10 @@ where
 
     fn get_paths(&self) -> &HashMap<N, W> {
         &self.store
+    }
+
+    fn get(&self, node: &N) -> Option<&W> {
+        self.store.get(node)
     }
 }
 

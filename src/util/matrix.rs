@@ -74,6 +74,23 @@ impl<T: Display> Display for Matrix<T> {
     }
 }
 
+impl<T: Add<Output = T> + Clone> Add for Matrix<T> {
+    type Output = Self;
+    fn add(self, rhs: Self) -> Self::Output {
+        assert_eq!(self.width, rhs.width);
+        assert_eq!(self.height, rhs.height);
+        let mut data = Vec::new();
+        for i in 0..self.data.len() {
+            data.push(self.data[i].clone() + rhs.data[i].clone());
+        }
+        Self {
+            data: data.into_boxed_slice(),
+            width: self.width,
+            height: self.height,
+        }
+    }
+}
+
 /// Convolve a matrix with a kernel.
 /// * `matrix` - The matrix to convolve.
 /// * `kernel` - The kernel to convolve with.

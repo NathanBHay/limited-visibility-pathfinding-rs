@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use std::{cmp::Ordering, collections::HashMap, hash::Hash, ops::Add};
+use std::{cmp::Ordering, collections::HashMap, hash::Hash};
 
 pub mod astar;
 pub mod dstarlite;
@@ -8,6 +8,7 @@ pub mod focalsearch;
 pub mod pathstore;
 pub mod samplestar;
 pub mod uninformed;
+pub mod samplestarstats;
 /// Reconstructs a path from a given node to the start node
 /// ## Arguments
 /// * `parent` - A map of nodes to their parent nodes
@@ -39,13 +40,12 @@ pub(crate) fn reconstruct_path_with_cost<N, C>(
 ) -> (Vec<N>, C)
 where
     N: Hash + Eq + Clone,
-    C: Ord + Default + Clone + Add<Output = C>,
+    C: Clone
 {
     let mut path = vec![node.clone()];
-    let mut cost = C::default();
-    while let Some((Some(prev), c)) = parent.get(&node) {
+    let cost = parent[&node].1.clone();
+    while let Some((Some(prev), _)) = parent.get(&node) {
         path.push(prev.clone());
-        cost = cost + c.clone();
         node = prev.clone();
     }
     path.reverse();

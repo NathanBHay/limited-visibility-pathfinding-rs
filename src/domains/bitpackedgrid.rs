@@ -112,7 +112,7 @@ impl BitPackedGrid {
     }
 
     /// Get the number of 1s in the grid
-    pub fn count_1s(&self) -> usize {
+    pub fn count_ones(&self) -> usize {
         self.map_cells
             .iter()
             .map(|word| word.count_ones() as usize)
@@ -191,5 +191,13 @@ mod tests {
             grid.adjacent((0, 0), false).collect::<Vec<_>>(),
             vec![(1, 0), (0, 1)]
         );
+    }
+
+    #[test]
+    fn test_bitpackedgrid_count_one() {
+        let grid = BitPackedGrid::new_from_string(
+            ".....\n.@.@.\n.@.@.\n.@.@.\n....@\n".to_string(),
+        );
+        assert_eq!(grid.count_ones(), 18);
     }
 }

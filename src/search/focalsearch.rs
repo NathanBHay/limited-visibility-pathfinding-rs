@@ -1,8 +1,5 @@
 use std::{
-    collections::{BTreeMap, BinaryHeap, HashMap, HashSet},
-    fmt::Debug,
-    hash::Hash,
-    ops::Add,
+    collections::{BTreeMap, BinaryHeap, HashMap, HashSet}, hash::Hash, ops::Add
 };
 
 use super::{reconstruct_path_with_cost, SearchNode};
@@ -66,8 +63,8 @@ pub fn focal_search<E, I, C, N, G, H1, H2, F>(
 where
     E: FnMut(&N) -> I,
     I: IntoIterator<Item = (N, C)>,
-    C: Ord + Default + Clone + Add<Output = C> + Debug,
-    N: Hash + Clone + Eq + Debug,
+    C: Ord + Default + Clone + Add<Output = C>,
+    N: Hash + Clone + Eq,
     G: Fn(&N) -> bool,
     H1: Fn(&N) -> C,
     H2: Fn(&N) -> C,
@@ -181,7 +178,7 @@ mod test {
             |n| n == &(4, 4),
             |n| manhattan_distance(*n, (4, 4)), // Fix: Dereference the reference to the tuple
             |_| 0,
-            |x| *x,
+            |x| *x, 
         );
         assert_eq!(
             path.unwrap().0,
