@@ -19,6 +19,11 @@ pub struct Visualiser {
     goal: Option<(usize, usize)>,
 }
 
+// TODO: Statistics Store is an expandable store that keeps track of certain stats. It will
+// be a attribute within sample star. It will run every loop and update the stats.
+// The stats method will take in a both bit packed grids and will will run a set
+// of functions on them to get the stats. The stats will be returned as a hashmap
+
 impl Visualiser {
     /// Create a new visualiser for a `SampleGrid` with a start and goal
     pub fn new(
@@ -61,7 +66,7 @@ impl Visualiser {
         current: Option<(usize, usize)>,
         next: Option<(usize, usize)>,
         paths: &HashMap<(usize, usize), usize>,
-        stats: Option<Vec<(&str, &str)>>,
+        stats: Vec<String>,
     ) {
         let sample_grid = json!({
             "sample_grid": get_sample_grid(sample_grid),
@@ -89,6 +94,7 @@ impl Visualiser {
         }
         let sample_grid = json!({
             "path": create_pathlist(&paths),
+            "length": final_path.len(),
         });
         let mut file = File::create(format!("{}_final_path.json", self.file_path)).unwrap();
         serde_json::to_writer(&mut file, &sample_grid).unwrap();
@@ -113,7 +119,7 @@ fn get_sample_grid(grid: Option<&SampleGrid>) -> Vec<Vec<f32>> {
 }
 
 fn create_pathlist<K: Clone>(map: &HashMap<K, usize>) -> Vec<(K, f32)> {
-    let max = map.iter().map(|(_, w)| *w).max().unwrap() as f32;
+    let max = map.iter().map(|(_, w)| *w).max().unwrap_or(1) as f32;
     map.iter()
         .map(|(k, w)| (k.clone(), *w as f32 / max))
         .collect()

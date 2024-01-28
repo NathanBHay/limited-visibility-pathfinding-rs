@@ -11,12 +11,10 @@ use std::sync::{Arc, Mutex};
 use rayon::prelude::*;
 
 use crate::{
-    domains::{bitpackedgrid::BitPackedGrid, samplegrid::SampleGrid},
-    heuristics::distance::manhattan_distance,
-    util::{filter::KalmanNode, matrix::Matrix},
+    domains::{bitpackedgrid::BitPackedGrid, samplegrid::SampleGrid}, heuristics::distance::manhattan_distance, util::{filter::KalmanNode, matrix::Matrix}
 };
 
-use super::{focalsearch::focal_search, pathstore::PathStore};
+use super::{focalsearch::focal_search, pathstore::PathStore, samplestarstats::SampleStarStats};
 
 pub type PathStoreT = Box<dyn PathStore<(usize, usize), usize>>;
 
@@ -36,6 +34,7 @@ pub struct SampleStar {
     kernel: Matrix<f32>,
     pub final_path: Vec<(usize, usize)>,
     pub path_store: Arc<Mutex<PathStoreT>>,
+    pub stats: Arc<Mutex<SampleStarStats>>,
 }
 
 impl SampleStar {
@@ -47,6 +46,7 @@ impl SampleStar {
         epoch: usize,
         kernel: Matrix<f32>,
         path_store: PathStoreT,
+        stats: SampleStarStats,
     ) -> Self {
         assert!(grid.bound_check(start) && grid.bound_check(goal));
         Self {
@@ -58,6 +58,7 @@ impl SampleStar {
             kernel,
             final_path: vec![start],
             path_store: Arc::new(Mutex::new(path_store)),
+            stats: Arc::new(Mutex::new(stats)),
         }
     }
 
@@ -68,8 +69,10 @@ impl SampleStar {
         }
         {
             self.path_store.lock().unwrap().reinitialize();
+            self.stats.lock().unwrap().clear();
         }
         self.grid.raycast_update(self.current, &self.kernel);
+        let valid_paths = Arc::new(Mutex::new(0));
         (0..self.epoch).into_par_iter().for_each(|_| {
             let mut gridmap = BitPackedGrid::new(self.grid.width, self.grid.height);
             let mut sampled_before = gridmap.clone();
@@ -81,14 +84,29 @@ impl SampleStar {
                 |_| 0,
                 |n| *n,
             ) {
-                self.path_store.lock().unwrap().add_path(path, weight);
+                {
+                    let mut stats = self.stats.lock().unwrap();
+                    stats.run_path_stats(&self.grid, &path);
+                    stats.add(1, sampled_before.count_ones() as f32);
+                    stats.add(2, weight as f32);
+                    *valid_paths.lock().unwrap() += 1;
+                }
+                {
+                    self.path_store.lock().unwrap().add_path(path, weight);
+                }
             }
         });
         self.previous = self.current;
         let adj = self.grid
             .adjacent(self.current, false)
             .collect::<Vec<_>>();
-        self.current = self.path_store.lock().unwrap().next_node(adj).unwrap_or(self.current);
+        let path_store = self.path_store.lock().unwrap();
+        let mut stats = self.stats.lock().unwrap();
+        let valid_paths = valid_paths.lock().unwrap();
+        stats.add(0, *valid_paths as f32);
+        stats.collate_path_stats(*valid_paths);
+        stats.run_step_stats(&path_store, &adj);
+        self.current = path_store.next_node(adj).unwrap_or(self.current);
         self.final_path.push(self.current);
         false
     }

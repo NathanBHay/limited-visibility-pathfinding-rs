@@ -228,6 +228,7 @@ impl SampleGrid {
         super::neighbors(x, y, false)
             .filter(move |(x, y)| {
                 if self.bound_check((*x, *y)) && !sampled_before.get_bit_value((*x, *y)) {
+                    sampled_before.set_bit_value((*x, *y), true);
                     self.sample(gridmap, (*x, *y))
                 } else {
                     gridmap.get_bit_value((*x, *y))

@@ -18,6 +18,7 @@ viridis[0, :] = 0  # Make the 0 value fully transparent
 viridis = ListedColormap(viridis)
 viridis1 = viridis(1.0)
 node_size = 100
+props = dict(boxstyle='round', facecolor='white',  alpha=0.5)  # Define properties for the text box
 
 class Visualiser:
     def __init__(self, file_name: str) -> None:
@@ -38,16 +39,16 @@ class Visualiser:
         with open(f'{self.file_name}_ground_truth.json') as f:
             ground_truth = json_load(f)
             if start := ground_truth['start']:
-                self.ax.scatter(start[0], self.dims[0] - start[1], color=viridis1, s=node_size)
+                self.ax.scatter(start[0] + 0.5, self.dims[0] - start[1] - 0.5, color=viridis1, s=node_size)
             self.goal = ground_truth['goal']
             if self.goal:
-                self.ax.scatter(self.goal[0], self.dims[0] - self.goal[1], color=viridis1, s=node_size, marker='s')
+                self.ax.scatter(self.goal[0] + 0.5, self.dims[0] - self.goal[1] - 0.5, color=viridis1, s=node_size, marker='s')
 
     def visualise_ground_truth(self):
         """
         Visualise the file_ground_truth.json file. The ground truth is represented as a 2d bool array.
         """
-        self.ax.set_title(f'{self.file_name.capitalize()} Ground Truth')
+        self.ax.set_title(f'{self.file_name.capitalize()} Ground Truth', fontsize=16)
         with open(f'{self.file_name}_ground_truth.json') as f:
             ground_truth = json_load(f)
             ground_truth = np.array(ground_truth['grid']).astype(bool).transpose()
@@ -60,7 +61,7 @@ class Visualiser:
         times they were visited. The current and next points follow basic (x, y) notation.
         The stats are a list of important stats added to the legend.
         """
-        self.ax.set_title(f'{self.file_name.capitalize()} Sample Grid at Iteration {iteration}')
+        self.ax.set_title(f'{self.file_name.capitalize()} Sample Grid at Iteration {iteration}', fontsize=16)
         with open(f'{self.file_name}_step_{iteration}.json') as f:
             sample_grid_obj = json_load(f)
             if labels:
@@ -76,10 +77,10 @@ class Visualiser:
             self.ax.imshow(path_counts, cmap=viridis, interpolation='nearest', alpha=0.5, extent=[0, self.dims[1], 0, self.dims[0]])
 
             if self.goal:
-                self.ax.scatter(self.goal[0], self.dims[0] - self.goal[1], color=viridis1, s=node_size, marker='s')
+                self.ax.scatter(self.goal[0] + 0.5, self.dims[0] - self.goal[1] - 0.5, color=viridis1, s=node_size, marker='s')
 
             if current := sample_grid_obj['current']:
-                self.ax.scatter(current[0], self.dims[0] - current[1], color=viridis1, s=node_size)
+                self.ax.scatter(current[0] + 0.5, self.dims[0] - current[1] - 0.5, color=viridis1, s=node_size)
 
             if next := sample_grid_obj['next']:
                 marker = '*'
@@ -90,21 +91,22 @@ class Visualiser:
                     elif diff == (0, 1): marker = 'v'
                     elif diff == (1, 0): marker = '>'
                     elif diff == (-1, 0): marker = '<'
-                self.ax.scatter(next[0], self.dims[0] - next[1], color=viridis1, s=node_size, marker=marker)
+                self.ax.scatter(next[0] + 0.5, self.dims[0] - next[1] - 0.5, color=viridis1, s=node_size, marker=marker)
 
             if stats := sample_grid_obj['stats']:
-                for stat in stats:
-                    self.ax.text(stat[0], stat[1], ha="bottom", va="left", color=viridis1)
+                self.ax.text(1, 1, '\n'.join(stats), transform=self.ax.transAxes, fontsize=12, verticalalignment='top', horizontalalignment='right', bbox=props)
 
     def visualise_final_path(self):
         """
         Visualise the file_final_path.json file. The final path is represented as a edge list.
         """
-        self.ax.set_title(f'{self.file_name.capitalize()} Final Path')
+        self.ax.set_title(f'{self.file_name.capitalize()} Final Path', fontsize=16)
         self.visualise_start_end()
         with open(f'{self.file_name}_final_path.json') as f:
-            for edge in json_load(f)['path']:
-                self.ax.plot([edge[0][0][0], edge[0][1][0]], [self.dims[0] - edge[0][0][1], self.dims[0] - edge[0][1][1]], c=viridis(edge[1]), linewidth=4)
+            final_path = json_load(f)
+            for edge in final_path['path']:
+                self.ax.plot([edge[0][0][0] + 0.5, edge[0][1][0] + 0.5], [self.dims[0] - edge[0][0][1] - 0.5, self.dims[0] - edge[0][1][1] - 0.5], c=viridis(edge[1]), linewidth=4)
+            self.ax.text(1, 1, f'Path Len: {final_path["length"]}', transform=self.ax.transAxes, fontsize=14, verticalalignment='top', horizontalalignment='right', bbox=props)
 
     def visualise_all(self, labels: bool = True, limit: int = 1000):
         """
