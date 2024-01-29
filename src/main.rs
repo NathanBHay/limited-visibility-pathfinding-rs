@@ -19,10 +19,9 @@ mod util;
 // Goal to Improve 6s for 50 & 30-35 for 200
 fn main() {
     let now = Instant::now();
-    // for map in maps::MAP_PACK.into_iter() {
-    //     run_sample_star(map, 1, 10000);
-    // }
-    run_sample_star(maps::LAK, 10, 100);
+    for map in maps::MAP_PACK.into_iter() {
+        run_sample_star(map, 10, 500);
+    }
     println!("Time Taken: {}s", now.elapsed().as_secs_f32());
 }
 

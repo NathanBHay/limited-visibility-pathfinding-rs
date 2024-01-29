@@ -131,19 +131,21 @@ class Visualiser:
 
 def main():
     parser = argparse.ArgumentParser(description='Visualise pathfinding algorithms')
-    parser.add_argument('file_name', type=str, help='The name of the file to visualise')
+    parser.add_argument('file_name', type=str, nargs='+', help='The name of the file to visualise')
     parser.add_argument('-vs', '--visualise-specific', type=int, help='The specific step to visualise')
     parser.add_argument('-l', '--labels', type=bool, default=False, help='Whether to show labels on the sample grid')
-    parser.add_argument('-i', '--limit', type=int, default=1000, help='The maximum number of steps to visualise')
+    parser.add_argument('-i', '--limit', type=int, default=10000, help='The maximum number of steps to visualise')
     args = parser.parse_args()
     start_time = time.time()
-    v = Visualiser(args.file_name)
     if args.visualise_specific:
+        v = Visualiser(args.file_name)
         v.visualise_ground_truth()
         v.visualise_samplestar(args.visualise_specific, args.labels)
         plt.show()
     else:
-        v.visualise_all(args.labels, args.limit)
+        for file_name in args.file_name:
+            v = Visualiser(file_name)
+            v.visualise_all(args.labels, args.limit)
     print(f'Time taken: {time.time() - start_time}s')
 
 if __name__ == '__main__':

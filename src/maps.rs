@@ -14,18 +14,17 @@ pub const MEDUSA: Problem = ("Medusa", "tests/Medusa.map", (60, 250), (460, 20))
 pub const SIROCCO: Problem = ("Sirocco", "tests/Sirocco.map", (10, 250), (750, 250));
 pub const TRISKELION: Problem = ("Triskelion", "tests/Triskelion.map", (260, 500), (10, 10));
 pub const WAYPOINTJUNCTION: Problem = ("Waypoint Junc", "tests/WaypointJunction.map", (245, 20), (260, 500));
-pub const MAP_PACK: [Problem; 13] = [
-    BASIC,
+pub const MAP_PACK: [Problem; 5] = [
     MAP,
     WALL,
     CACAVERNS,
-    DRYWATER,
-    FLOODEDPLAINS,
+    // DRYWATER,
+    // FLOODEDPLAINS,
     HRT,
     LAK,
-    MAZE,
-    MEDUSA,
-    SIROCCO,
-    TRISKELION,
-    WAYPOINTJUNCTION,
+    // MAZE,
+    // MEDUSA,
+    // SIROCCO,
+    // TRISKELION,
+    // WAYPOINTJUNCTION,
 ];

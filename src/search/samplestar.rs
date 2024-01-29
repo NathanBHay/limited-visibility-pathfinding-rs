@@ -35,6 +35,7 @@ pub struct SampleStar {
     pub final_path: Vec<(usize, usize)>,
     pub path_store: Arc<Mutex<PathStoreT>>,
     pub stats: Arc<Mutex<SampleStarStats>>,
+    break_flag: usize,
 }
 
 impl SampleStar {
@@ -59,6 +60,7 @@ impl SampleStar {
             final_path: vec![start],
             path_store: Arc::new(Mutex::new(path_store)),
             stats: Arc::new(Mutex::new(stats)),
+            break_flag: 0,
         }
     }
 
@@ -81,8 +83,8 @@ impl SampleStar {
                 self.current,
                 |n| *n == self.goal,
                 |n| manhattan_distance(*n, self.goal),
-                |_| 0,
-                |n| *n,
+                |(x, y)| 0,
+                |n| 0,
             ) {
                 {
                     let mut stats = self.stats.lock().unwrap();
@@ -101,6 +103,14 @@ impl SampleStar {
             .adjacent(self.current, false)
             .collect::<Vec<_>>();
         let path_store = self.path_store.lock().unwrap();
+        if path_store.get(&self.current).is_none() {
+            self.break_flag += 1;
+            if self.break_flag > 10 {
+                return true;
+            }
+        } else {
+            self.break_flag = 0;
+        }
         let mut stats = self.stats.lock().unwrap();
         let valid_paths = valid_paths.lock().unwrap();
         stats.add(0, *valid_paths as f32);
