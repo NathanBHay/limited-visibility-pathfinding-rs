@@ -68,7 +68,13 @@ class Visualiser:
                 sample_grid = np.array(sample_grid_obj['sample_grid']).astype(float)
                 for i in range(len(sample_grid)):
                     for j in range(len(sample_grid[i])):
-                        self.ax.text(i, j, round(sample_grid[i, j], 3), ha="center", va="center", color=Greys(sample_grid[i, j]))
+                        self.ax.text(
+                            i + 0.5,
+                            len(sample_grid[i]) - j - 0.5,
+                            round(sample_grid[i, j], 3),
+                            ha="center", va="center",
+                            color=Greys(sample_grid[i, j])
+                        )
 
             paths = sample_grid_obj['paths']
             path_counts = np.zeros(self.dims)
@@ -133,7 +139,7 @@ def main():
     parser = argparse.ArgumentParser(description='Visualise pathfinding algorithms')
     parser.add_argument('file_name', type=str, nargs='+', help='The name of the file to visualise')
     parser.add_argument('-vs', '--visualise-specific', type=int, help='The specific step to visualise')
-    parser.add_argument('-l', '--labels', type=bool, default=False, help='Whether to show labels on the sample grid')
+    parser.add_argument('-l', '--labels', action='store_true', default=False, help='Whether to show labels on the sample grid')
     parser.add_argument('-i', '--limit', type=int, default=10000, help='The maximum number of steps to visualise')
     args = parser.parse_args()
     start_time = time.time()

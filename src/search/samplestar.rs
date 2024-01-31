@@ -7,11 +7,13 @@
 //! Heuristics could include ones that take into account probability of being an obstacle:
 //! `self.grid.sample_grid[x][y].state * manhattan_distance(n*, self.goal)`
 
-use std::sync::{Arc, Mutex};
 use rayon::prelude::*;
+use std::sync::{Arc, Mutex};
 
 use crate::{
-    domains::{bitpackedgrid::BitPackedGrid, samplegrid::SampleGrid}, heuristics::distance::manhattan_distance, util::{filter::KalmanNode, matrix::Matrix}
+    domains::{bitpackedgrid::BitPackedGrid, samplegrid::SampleGrid},
+    heuristics::distance::manhattan_distance,
+    util::{filter::KalmanNode, matrix::Matrix},
 };
 
 use super::{focalsearch::focal_search, pathstore::PathStore, samplestarstats::SampleStarStats};
@@ -79,12 +81,15 @@ impl SampleStar {
             let mut gridmap = BitPackedGrid::new(self.grid.width, self.grid.height);
             let mut sampled_before = gridmap.clone();
             if let Some((path, weight)) = focal_search(
-                |n| self.grid.sample_adjacenct(&mut gridmap, &mut sampled_before, *n),
+                |n| {
+                    self.grid
+                        .sample_adjacenct(&mut gridmap, &mut sampled_before, *n)
+                },
                 self.current,
                 |n| *n == self.goal,
                 |n| manhattan_distance(*n, self.goal),
-                |(x, y)| 0,
-                |n| 0,
+                |_| 0,
+                |n| *n,
             ) {
                 {
                     let mut stats = self.stats.lock().unwrap();
@@ -99,9 +104,7 @@ impl SampleStar {
             }
         });
         self.previous = self.current;
-        let adj = self.grid
-            .adjacent(self.current, false)
-            .collect::<Vec<_>>();
+        let adj = self.grid.adjacent(self.current, false).collect::<Vec<_>>();
         let path_store = self.path_store.lock().unwrap();
         if path_store.get(&self.current).is_none() {
             self.break_flag += 1;

@@ -69,7 +69,13 @@ impl SampleGrid {
 
     /// Initializes an area of the bitfield from the sampling grid values, where
     /// 0.0 indicates a guaranteed obstacles and (0,1) indicates a probability
-    pub fn init_gridmap_area<'a>(&mut self, gridmap: &'a mut BitPackedGrid, (x, y): (usize, usize), width: usize, height: usize) {
+    pub fn init_gridmap_area<'a>(
+        &self,
+        gridmap: &'a mut BitPackedGrid,
+        (x, y): (usize, usize),
+        width: usize,
+        height: usize,
+    ) {
         for x in x..x + width {
             for y in y..y + height {
                 gridmap.set_bit_value((x, y), self.sample_grid[x][y].state != 0.0);
@@ -78,7 +84,12 @@ impl SampleGrid {
     }
 
     /// Initializes the gridmap from the sampling grid
-    pub fn init_gridmap_radius<'a>(&mut self, gridmap: &'a mut BitPackedGrid, (x, y): (usize, usize), radius: usize) {
+    pub fn init_gridmap_radius<'a>(
+        &mut self,
+        gridmap: &'a mut BitPackedGrid,
+        (x, y): (usize, usize),
+        radius: usize,
+    ) {
         let (n, width, height) = self.radius_calc((x, y), radius);
         self.init_gridmap_area(gridmap, n, width, height);
     }
@@ -113,7 +124,13 @@ impl SampleGrid {
     }
 
     /// Samples an area of the grid
-    pub fn sample_area<'a>(&self, gridmap: &'a mut BitPackedGrid, (x, y): (usize, usize), width: usize, height: usize) {
+    pub fn sample_area<'a>(
+        &self,
+        gridmap: &'a mut BitPackedGrid,
+        (x, y): (usize, usize),
+        width: usize,
+        height: usize,
+    ) {
         for x in x..x + width {
             for y in y..y + height {
                 self.sample(gridmap, (x, y));
@@ -136,7 +153,12 @@ impl SampleGrid {
     }
 
     /// Samples a cell with a given chance
-    pub fn sample_radius<'a>(&self, gridmap: &'a mut BitPackedGrid, (x, y): (usize, usize), radius: usize) {
+    pub fn sample_radius<'a>(
+        &self,
+        gridmap: &'a mut BitPackedGrid,
+        (x, y): (usize, usize),
+        radius: usize,
+    ) {
         let (n, width, height) = self.radius_calc((x, y), radius);
         self.sample_area(gridmap, n, width, height);
     }
@@ -157,7 +179,7 @@ impl SampleGrid {
 
     /// Creates a kernel for the adjacency of a point. Used to update nodes with
     /// matrix representing covariance.
-    pub fn adjacency_kernel(&self, kernel: &Matrix<f32>) -> Matrix<f32> {
+    pub fn adjacency_kernel(kernel: &Matrix<f32>) -> Matrix<f32> {
         let mut kernel = kernel.clone();
         let radius = kernel.width / 2;
         kernel[radius][radius] = 0.0;
@@ -178,13 +200,13 @@ impl SampleGrid {
 
     /// Updates nodes based upon a radius
     pub fn update_radius(&mut self, (x, y): (usize, usize), kernel: &Matrix<f32>) {
-        let kernel = self.adjacency_kernel(kernel);
+        let kernel = SampleGrid::adjacency_kernel(kernel);
         self.update_kernel((x, y), kernel);
     }
 
     /// Updates nodes based on visibile nodes
-    pub fn raycast_update(&mut self, (x, y): (usize, usize), kernel: &Matrix<f32>) -> usize {
-        let mut kernel = self.adjacency_kernel(kernel);
+    pub fn raycast_update(&mut self, (x, y): (usize, usize), kernel: &Matrix<f32>) {
+        let mut kernel = SampleGrid::adjacency_kernel(kernel);
 
         let visible = raycast_matrix(
             (x, y),
@@ -196,12 +218,11 @@ impl SampleGrid {
             |x, y| self.bound_check((x, y)),
         );
         for (k, v) in kernel.data.iter_mut().zip(visible.data.iter()) {
-            if *v {
+            if !*v {
                 *k = 1.0;
             }
         }
         self.update_kernel((x, y), kernel);
-        visible.data.iter().filter(|x| **x).count()
     }
 
     /// Checks if within bounds
@@ -296,10 +317,7 @@ mod tests {
             grid.ground_truth.print_cells(None),
             "@....\n.....\n.....\n.....\n"
         );
-        assert_eq!(
-            gridmap.print_cells(None),
-            "@..@@\n...@@\n...@@\n@@@@@\n"
-        );
+        assert_eq!(gridmap.print_cells(None), "@..@@\n...@@\n...@@\n@@@@@\n");
     }
 
     #[test]

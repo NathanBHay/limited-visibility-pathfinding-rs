@@ -5,6 +5,8 @@ use std::{
     ops::{Add, Index, IndexMut, Mul},
 };
 
+use crate::heuristics::distance::manhattan_distance;
+
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Matrix<T> {
     pub data: Box<[T]>,
@@ -65,6 +67,7 @@ impl<T> IndexMut<usize> for Matrix<T> {
 impl<T: Display> Display for Matrix<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         for row in 0..self.height {
+            write!(f, "| ")?;
             for col in 0..self.width {
                 write!(f, "{}, ", self[row][col])?;
             }
@@ -226,14 +229,15 @@ pub fn gaussian_kernal(size: usize, sigma: f32) -> Matrix<f32> {
     kernel
 }
 
-/// Gaussian Kernel that finds 1 - kernel value. Used for visibility
-/// function
-pub fn gaussian_kernel_rev(size: usize, sigma: f32) -> Matrix<f32> {
-    let mut kernel = gaussian_kernal(size, sigma);
-    for x in kernel.data.iter_mut() {
-        *x = 1.0 - *x;
+/// Creates a matrix of manhattan distances from the center.
+pub fn manhattan_dist_matrix(width: usize, height: usize) -> Matrix<usize> {
+    let mut matrix = matrix![0; width, height];
+    for i in 0..width {
+        for j in 0..height {
+            matrix[i][j] = manhattan_distance((i, j), (width / 2, height / 2));
+        }
     }
-    kernel
+    matrix
 }
 
 #[cfg(test)]
@@ -361,5 +365,11 @@ mod tests {
                 [0.0, 0.19895503, 0.60209, 0.9248864, 1.0],
             ]
         );
+    }
+
+    #[test]
+    fn test_manhattan_dist_matrix() {
+        let matrix = manhattan_dist_matrix(3, 3);
+        assert_eq!(matrix, matrix![[2, 1, 2], [1, 0, 1], [2, 1, 2],]);
     }
 }
