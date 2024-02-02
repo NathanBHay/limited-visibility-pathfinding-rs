@@ -59,7 +59,7 @@ pub fn focal_search<E, I, C, N, G, H1, H2, F>(
     heuristic: H1,
     focal_heuristic: H2,
     focal_calc: F,
-) -> Option<(Vec<N>, C)>
+) -> (Vec<N>, C)
 where
     E: FnMut(&N) -> I,
     I: IntoIterator<Item = (N, C)>,
@@ -83,13 +83,16 @@ where
     }]);
     let mut previous = HashMap::new();
     previous.insert(start.clone(), (None, C::default()));
+
+    // The current closest node to the goal, used for case where no path is found
+    let mut best_node = (start.clone(), heuristic(&start));
     while let Some(SearchNode {
         node,
         cost: (fcost, hcost),
     }) = focal.pop()
     {
         if goal(&node) {
-            return Some(reconstruct_path_with_cost(previous, node.clone()));
+            return reconstruct_path_with_cost(previous, node.clone());
         }
         let f_min = open.peak().unwrap_or(&fcost).clone();
         if !open.remove(&node, &(hcost)) {
@@ -99,8 +102,13 @@ where
             let new_cost = previous[&node].1.clone() + cost;
             if !previous.contains_key(&child) || new_cost < previous[&child].1 {
                 previous.insert(child.clone(), (Some(node.clone()), new_cost.clone()));
-                let child_h = heuristic(&child) + new_cost.clone();
+                let h = heuristic(&child);
+                let child_h = h.clone()+ new_cost.clone();
                 open.insert(child.clone(), child_h.clone());
+                if h <= best_node.1 {
+                    best_node = (child.clone(), h);
+                }
+                // Add to focal list given within the focal range
                 if new_cost <= focal_calc(&f_min) {
                     focal.push(SearchNode {
                         node: child.clone(),
@@ -126,7 +134,7 @@ where
             }
         }
     }
-    None
+    reconstruct_path_with_cost(previous, best_node.0)
 }
 
 #[cfg(test)]
@@ -160,7 +168,7 @@ mod test {
             |x| *x,
             |x| *x,
         );
-        assert_eq!(results.unwrap().0, vec![0, 2]);
+        assert_eq!(results.0, vec![0, 2]);
     }
 
     #[test]
@@ -181,7 +189,7 @@ mod test {
             |x| *x, 
         );
         assert_eq!(
-            path.unwrap().0,
+            path.0,
             vec![
                 (0, 4),
                 (1, 4),

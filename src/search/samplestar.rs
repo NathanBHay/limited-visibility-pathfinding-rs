@@ -26,7 +26,11 @@ pub type PathStoreT = Box<dyn PathStore<(usize, usize), usize>>;
 /// * `start` - The starting node.
 /// * `goal` - The goal node.
 /// * `epoch` - The number of times to sample each node.
-/// * `radius` - The radius to sample around each node.
+/// * `kernel` - The kernel to sample with.
+/// * `path_store` - The path store to store the paths.
+/// * `path_to_goal` - If there is a path to the goal in the path store.
+/// * `stats` - The statistics store to store the stats.
+/// 
 pub struct SampleStar {
     pub grid: SampleGrid,
     pub previous: (usize, usize),
@@ -36,8 +40,8 @@ pub struct SampleStar {
     kernel: Matrix<f32>,
     pub final_path: Vec<(usize, usize)>,
     pub path_store: Arc<Mutex<PathStoreT>>,
+    path_to_goal: Arc<Mutex<bool>>,
     pub stats: Arc<Mutex<SampleStarStats>>,
-    break_flag: usize,
 }
 
 impl SampleStar {
@@ -62,7 +66,7 @@ impl SampleStar {
             final_path: vec![start],
             path_store: Arc::new(Mutex::new(path_store)),
             stats: Arc::new(Mutex::new(stats)),
-            break_flag: 0,
+            path_to_goal: Arc::new(Mutex::new(false)),
         }
     }
 
@@ -71,16 +75,15 @@ impl SampleStar {
         if self.current == self.goal {
             return true;
         }
-        {
-            self.path_store.lock().unwrap().reinitialize();
-            self.stats.lock().unwrap().clear();
-        }
+        self.path_store.lock().unwrap().reinitialize();
+        *self.path_to_goal.lock().unwrap() = false;
+        self.stats.lock().unwrap().clear();
         self.grid.raycast_update(self.current, &self.kernel);
         let valid_paths = Arc::new(Mutex::new(0));
         (0..self.epoch).into_par_iter().for_each(|_| {
             let mut gridmap = BitPackedGrid::new(self.grid.width, self.grid.height);
             let mut sampled_before = gridmap.clone();
-            if let Some((path, weight)) = focal_search(
+            let (path, weight) = focal_search(
                 |n| {
                     self.grid
                         .sample_adjacenct(&mut gridmap, &mut sampled_before, *n)
@@ -90,30 +93,43 @@ impl SampleStar {
                 |n| manhattan_distance(*n, self.goal),
                 |_| 0,
                 |n| *n,
-            ) {
-                {
-                    let mut stats = self.stats.lock().unwrap();
+            );
+            // TODO: Make these conditions more readable && efficient
+            // Fix update to ensure adjacent nodes have 100% accuracy
+
+            // The path_store acts as a store to the best path until a store to the goal is
+            // found, then it acts as a store to the goal
+            let found_path = path.last() == Some(&self.goal);
+            let clear = found_path && !*self.path_to_goal.lock().unwrap();
+            if clear {
+                *self.path_to_goal.lock().unwrap() = true;
+            } 
+            {
+                let mut stats = self.stats.lock().unwrap();
+                if clear {
+                    *valid_paths.lock().unwrap() = 0;
+                    stats.clear();
+                }
+                if found_path == *self.path_to_goal.lock().unwrap() {
                     stats.run_path_stats(&self.grid, &path);
                     stats.add(1, sampled_before.count_ones() as f32);
                     stats.add(2, weight as f32);
                     *valid_paths.lock().unwrap() += 1;
                 }
-                {
-                    self.path_store.lock().unwrap().add_path(path, weight);
+            }
+            {
+                let mut path_store = self.path_store.lock().unwrap();
+                if clear {
+                    path_store.reinitialize();
+                }
+                if found_path == *self.path_to_goal.lock().unwrap() {
+                    path_store.add_path(path, weight);
                 }
             }
         });
         self.previous = self.current;
         let adj = self.grid.adjacent(self.current, false).collect::<Vec<_>>();
         let path_store = self.path_store.lock().unwrap();
-        if path_store.get(&self.current).is_none() {
-            self.break_flag += 1;
-            if self.break_flag > 10 {
-                return true;
-            }
-        } else {
-            self.break_flag = 0;
-        }
         let mut stats = self.stats.lock().unwrap();
         let valid_paths = valid_paths.lock().unwrap();
         stats.add(0, *valid_paths as f32);
