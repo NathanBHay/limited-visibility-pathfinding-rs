@@ -6,93 +6,87 @@
 //! * SampleGrid, a grid map that uses a hash map to store the map and has a chance of being occupied
 
 #![allow(dead_code)]
+
+use std::fs::read_to_string;
+
 pub mod adjacencylist;
 pub mod bitpackedgrid;
 pub mod edgelist;
 pub mod hashedgrid;
 pub mod samplegrid;
 
-/// A helper function that creates a map from a string given functions
-/// to initialize the map and add obstacles
-/// ## Arguments
-/// * `s` - A string representing the grid map
-/// * `initialize` - A function that initializes the map
-/// * `add_obstacle` - A function that adds an obstacle to the map
-/// ## Returns
-/// A map with a domain equal to the return type of initialize
-pub(crate) fn create_map_from_string<F, D, I>(
-    s: String,
-    mut initialize: I,
-    mut add_obstacle: F,
-) -> D
-where
-    I: FnMut(usize, usize) -> D,
-    F: FnMut(&mut D, usize, usize) -> (),
-{
-    let s = s.trim();
-    let start = s.find(|c: char| ['.', '@', 'T'].contains(&c));
-    let s = match start {
-        Some(start) => &s[start..],
-        None => "",
-    };
-    let height = s.lines().count();
-    let width = s.lines().next().map(|x| x.len()).unwrap();
-    let mut domain = initialize(width, height);
-    for (i, line) in s.lines().enumerate() {
-        for (j, c) in line.chars().enumerate() {
-            if c == '.' {
-                add_obstacle(&mut domain, j, i);
-            }
-        }
-    }
-    domain
+/// Trait that 
+pub trait Domain {
+    /// Creates a new map with a given width and height
+    fn new(width: usize, height: usize) -> Self;
+
+    /// Sets the value of a cell in a map. True if the cell is traversable and 
+    /// false if it is an obstacle.
+    fn set_value(&mut self, n: (usize, usize), value: bool);
+
+    /// Gets the value of a cell in a map. True if the cell is traversable and
+    /// false if it is an obstacle.
+    fn get_value(&self, n: (usize, usize)) -> bool;
+
+    /// Get shape of the data listed in widht, height format.
+    fn shape(&self) -> (usize, usize);
 }
 
-/// A helper function that prints a map given a function to get the value of a cell
-/// ## Arguments
-/// * `width` - The width of the map
-/// * `height` - The height of the map
-/// * `get_cell_value` - A function that returns the value of a cell given its x, y coordinates,
-/// true if the cell is free and false if it is an obstacle
-/// ## Returns
-/// A string representing the map where . is a free cell and @ is an obstacle
-pub(crate) fn print_cells(
-    width: usize,
-    height: usize,
-    get_cell_value: impl Fn(usize, usize) -> bool,
-    path: Option<Vec<(usize, usize)>>,
-) -> String {
-    let mut s = String::new();
-    for y in 0..height {
-        for x in 0..width {
-            if get_cell_value(x, y) {
-                s.push('.');
-            } else {
-                s.push('@');
+/// Trait used to create domains from files and strings.
+pub trait DomainCreate: Domain + Sized {
+    /// Create a new domain from a string, where . is used to represent traversable space
+    /// and all other characters represent terrain.
+    fn new_from_string(s: String) -> Self {
+        let s = s.trim();
+        let start = s.find(|c: char| ['.', '@', 'T'].contains(&c));
+        let s = match start {
+            Some(start) => &s[start..],
+            None => "",
+        };
+        let height = s.lines().count();
+        let width = s.lines().next().map(|x| x.len()).unwrap();
+        let mut domain = Self::new(width, height);
+        for (i, line) in s.lines().enumerate() {
+            for (j, c) in line.chars().enumerate() {
+                if c == '.' {
+                    domain.set_value((j, i), true);
+                }
             }
         }
-        s.push('\n');
+        domain
     }
-    if let Some(path) = path {
-        for (x, y) in path {
-            s.replace_range(y * (width + 1) + x..y * (width + 1) + x + 1, "*");
-        }
+
+    /// Create a new domain from a file
+    fn new_from_file(filename: &str) -> Self {
+        let s = read_to_string(filename).expect("Unable to read file");
+        Self::new_from_string(s)
     }
-    s
 }
 
-/// A debuging function which prints a vector of points
-pub fn print_points(cells: Vec<(usize, usize)>) -> String {
-    let width_max = cells.iter().map(|(x, _)| x).max().unwrap() + 1;
-    let width_min = cells.iter().map(|(x, _)| x).min().unwrap();
-    let height_max = cells.iter().map(|(_, y)| y).max().unwrap() + 1;
-    let height_min = cells.iter().map(|(_, y)| y).min().unwrap();
-    print_cells(
-        width_max - width_min,
-        height_max - height_min,
-        |x, y| cells.contains(&(x + width_min, y + height_min)),
-        None,
-    )
+/// Trait for Printing Domains
+pub trait DomainPrint: Domain {
+    /// Prints the cells of the domain where . represents a free cell and @ represents a blocked
+    /// cell. A path can be printed which is represented as *
+    fn print_cells(&self, path: Option<Vec<(usize, usize)>>) -> String {
+        let (width, height) = self.shape();
+        let mut s = String::new();
+        for y in 0..height {
+            for x in 0..width {
+                if self.get_value((x, y)) {
+                    s.push('.');
+                } else {
+                    s.push('@');
+                }
+            }
+            s.push('\n');
+        }
+        if let Some(path) = path {
+            for (x, y) in path {
+                s.replace_range(y * (width + 1) + x..y * (width + 1) + x + 1, "*");
+            }
+        }
+        s
+    }
 }
 
 /// Helper function to get a iterator of the neighbors of a cell

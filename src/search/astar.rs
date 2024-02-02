@@ -77,7 +77,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::{astar, SearchNode};
-    use crate::domains::bitpackedgrid::BitPackedGrid;
+    use crate::domains::{bitpackedgrid::BitPackedGrid, DomainCreate};
     use std::collections::BinaryHeap;
 
     #[test]

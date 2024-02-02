@@ -1,5 +1,6 @@
 use crate::search::samplestarstats::SampleStarStats;
 use domains::samplegrid::SampleGrid;
+use domains::DomainCreate;
 use maps::Problem;
 use search::pathstore::AccStore;
 use search::samplestar::{PathStoreT, SampleStar};

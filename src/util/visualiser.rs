@@ -9,7 +9,7 @@ use std::{
     io::{BufWriter, Write},
 };
 
-use crate::domains::{bitpackedgrid::BitPackedGrid, samplegrid::SampleGrid};
+use crate::domains::{bitpackedgrid::BitPackedGrid, samplegrid::SampleGrid, Domain};
 
 /// Visualiser tool for visualising `Sample Star` algorithm.
 /// Outputs to JSON format for use with the python visualiser.
@@ -43,10 +43,10 @@ impl Visualiser {
 
     /// Visualise the ground truth of the grid
     fn visualise_ground_truth(&self, grid: &BitPackedGrid) {
-        let mut ground_truth = vec![vec![false; grid.original_height]; grid.original_width];
-        for x in 0..grid.original_width {
-            for y in 0..grid.original_height {
-                ground_truth[x][y] = grid.get_bit_value((x, y));
+        let mut ground_truth = vec![vec![false; grid.height]; grid.width];
+        for x in 0..grid.width {
+            for y in 0..grid.height {
+                ground_truth[x][y] = grid.get_value((x, y));
             }
         }
         let ground_truth = json!({

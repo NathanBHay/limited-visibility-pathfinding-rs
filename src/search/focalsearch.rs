@@ -131,7 +131,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::heuristics::distance::manhattan_distance;
+    use crate::{domains::DomainCreate, heuristics::distance::manhattan_distance};
 
     use super::*;
     #[test]

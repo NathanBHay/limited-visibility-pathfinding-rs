@@ -3,9 +3,9 @@
 //! This is the simplest grid implementation and is fairly slow due
 //! to the possibility of hashing collisions.
 
-use std::{collections::HashSet, fs::read_to_string};
+use std::collections::HashSet;
 
-use super::{create_map_from_string, neighbors, print_cells};
+use super::{neighbors, Domain, DomainCreate, DomainPrint};
 
 /// A grid map whoch uses a hashset of obstacles to represent obstacles
 /// This is the simplest grid map implementation
@@ -13,73 +13,64 @@ use super::{create_map_from_string, neighbors, print_cells};
 /// * `width` - The width of the grid map
 /// * `height` - The height of the grid map
 /// * `diagonal` - Whether or not diagonal movement is allowed
-/// * `obstacles` - A hashset of obstacles
+/// * `valid_cells` - A hashset of cells that are traversable
 pub struct HashedGrid {
     pub width: usize,
     pub height: usize,
-    pub obstacles: HashSet<usize>,
+    pub valid_cells: HashSet<usize>,
 }
 
-impl HashedGrid {
+impl Domain for HashedGrid {
     /// Creates a new grid map with a given width and height
-    pub fn new(width: usize, height: usize) -> HashedGrid {
+    fn new(width: usize, height: usize) -> HashedGrid {
         HashedGrid {
             width,
             height,
-            obstacles: HashSet::new(),
+            valid_cells: HashSet::new(),
         }
     }
 
-    /// Creates a grid from string
-    pub fn new_from_string(s: String) -> HashedGrid {
-        let mut grid =
-            create_map_from_string(s, HashedGrid::new, |grid, x, y| grid.add_obstacle(x, y));
-        grid.invert();
-        grid
+    /// Sets the value of a cell in a map. True if the cell is traversable and 
+    /// false if it is an obstacle.
+    fn set_value(&mut self, (x, y): (usize, usize), value: bool) {
+        if value {
+            self.valid_cells.insert(x + y * self.width);
+        } else {
+            self.valid_cells.remove(&(x + y * self.width));
+        }
     }
 
-    /// Create a grid from a file
-    pub fn new_from_file(filename: &str) -> HashedGrid {
-        let s = read_to_string(filename).expect("Unable to read file");
-        HashedGrid::new_from_string(s)
+    fn get_value(&self, (x, y): (usize, usize)) -> bool {
+        self.valid_cells.contains(&(x + y * self.width))
     }
 
+    fn shape(&self) -> (usize, usize) {
+        (self.width, self.height)
+    }
+}
+
+impl DomainCreate for HashedGrid {}
+
+impl DomainPrint for HashedGrid {}
+
+impl HashedGrid {
     /// Inverts the grid map
     pub fn invert(&mut self) {
-        let mut new_obstacles = HashSet::new();
         for x in 0..self.width {
             for y in 0..self.height {
-                if self.get_map_value(x, y) {
-                    new_obstacles.insert(x + y * self.width);
-                }
+                self.set_value((x, y), !self.get_value((x, y)))
             }
         }
-        self.obstacles = new_obstacles;
-    }
-
-    /// Adds an obstacle to the grid map
-    pub fn add_obstacle(&mut self, x: usize, y: usize) {
-        self.obstacles.insert(x + y * self.width);
-    }
-
-    /// Removes an obstacle from the grid map
-    pub fn remove_obstacle(&mut self, x: usize, y: usize) {
-        self.obstacles.remove(&(x + y * self.width));
-    }
-
-    /// Checks if a given coordinate is valid to move into
-    pub fn get_map_value(&self, x: usize, y: usize) -> bool {
-        !self.obstacles.contains(&(x + y * self.width))
     }
 
     /// Checks if a given coordinate is valid
-    pub fn is_valid(&self, x: usize, y: usize) -> bool {
+    pub fn is_valid(&self, (x, y): (usize, usize)) -> bool {
         x < self.width && y < self.height
     }
 
     /// Checks if a given coordinate is valid and not an obstacle
-    pub fn valid_map_value(&self, x: usize, y: usize) -> bool {
-        self.is_valid(x, y) && self.get_map_value(x, y)
+    pub fn valid_map_value(&self, (x, y): (usize, usize)) -> bool {
+        self.is_valid((x, y)) && self.get_value((x, y))
     }
 
     /// Gets the neighbors of a given coordinate
@@ -89,42 +80,24 @@ impl HashedGrid {
         y: usize,
         diagonal: bool,
     ) -> impl Iterator<Item = (usize, usize)> + '_ {
-        neighbors(x, y, diagonal).filter(move |(x, y)| self.valid_map_value(*x, *y))
-    }
-
-    /// Prints the grid map where . is a free cell and @ is an obstacle
-    pub fn print_cells(&self) -> String {
-        print_cells(
-            self.width,
-            self.height,
-            |x, y| self.get_map_value(x, y),
-            None,
-        )
-    }
-
-    /// Prints the grid map where . is a free cell and @ is an obstacle
-    pub fn print_cells_with_path(&self, path: Vec<(usize, usize)>) -> String {
-        print_cells(
-            self.width,
-            self.height,
-            |x, y| self.get_map_value(x, y),
-            Some(path),
-        )
+        neighbors(x, y, diagonal).filter(move |(x, y)| self.valid_map_value((*x, *y)))
     }
 }
 
 #[cfg(test)]
 mod tests {
 
+    use crate::domains::{Domain, DomainCreate, DomainPrint};
+
     use super::HashedGrid;
 
     #[test]
     fn test_grid_add_obstacle() {
         let mut grid = HashedGrid::new(5, 5);
-        grid.add_obstacle(0, 0);
-        grid.add_obstacle(2, 3);
-        assert_eq!(grid.get_map_value(0, 0), false);
-        assert_eq!(grid.get_map_value(2, 3), false);
+        grid.set_value((0, 0), false);
+        grid.set_value((2, 3), false);
+        assert_eq!(grid.get_value((0, 0)), false);
+        assert_eq!(grid.get_value((2, 3)), false);
     }
 
     #[test]
@@ -133,12 +106,12 @@ mod tests {
         let grid = HashedGrid::new_from_string(map_str.to_string());
         assert_eq!(grid.width, 5);
         assert_eq!(grid.height, 6);
-        assert_eq!(grid.get_map_value(0, 0), true);
-        assert_eq!(grid.get_map_value(1, 1), false);
-        assert_eq!(grid.get_map_value(3, 1), false);
-        assert_eq!(grid.get_map_value(3, 3), false);
-        assert_eq!(grid.get_map_value(4, 4), true);
-        assert_eq!(grid.print_cells(), map_str);
+        assert_eq!(grid.get_value((0, 0)), true);
+        assert_eq!(grid.get_value((1, 1)), false);
+        assert_eq!(grid.get_value((3, 1)), false);
+        assert_eq!(grid.get_value((3, 3)), false);
+        assert_eq!(grid.get_value((4, 4)), true);
+        assert_eq!(grid.print_cells(None), map_str);
     }
 
     #[test]

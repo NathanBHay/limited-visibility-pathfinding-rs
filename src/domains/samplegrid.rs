@@ -1,5 +1,5 @@
 use super::bitpackedgrid::BitPackedGrid;
-use super::{create_map_from_string, print_cells};
+use super::{Domain, DomainCreate, DomainPrint};
 use crate::fov::fieldofvision::raycast_matrix;
 use crate::matrix;
 use crate::util::filter::KalmanNode;
@@ -19,13 +19,40 @@ pub struct SampleGrid {
     pub height: usize,
 }
 
+impl Domain for SampleGrid {
+    fn new(width: usize, height: usize) -> Self {
+        let node = KalmanNode::default();
+        SampleGrid {
+            sample_grid: matrix![node; height, width],
+            ground_truth: BitPackedGrid::new(width, height),
+            width,
+            height,
+        }
+    }
+
+    fn set_value(&mut self, (x, y): (usize, usize), value: bool) {
+        self.sample_grid[x][y].state = if value { 1.0 } else { 0.0 };
+    }
+
+    fn get_value(&self, (x, y): (usize, usize)) -> bool {
+        self.sample_grid[x][y].state != 0.0
+    }
+
+    fn shape(&self) -> (usize, usize) {
+        (self.width, self.height)
+    }
+}
+
+impl DomainCreate for SampleGrid {}
+
+impl DomainPrint for SampleGrid {}
+
 impl SampleGrid {
     const NEAREST_THRESHOLD: f32 = 0.5;
 
     /// Creates a new sampling grid from a sampling grid and a ground truth grid
     pub fn new_from_grid(grid: Matrix<f32>, ground_truth: BitPackedGrid) -> Self {
-        let width = grid.height;
-        let height = grid.width;
+        let (width, height) = (grid.width, grid.height);
         let mut sample_grid = matrix![KalmanNode::default(); height, width];
         for y in 0..width {
             // Swapped width and height here to match the matrix indexing
@@ -41,32 +68,6 @@ impl SampleGrid {
         }
     }
 
-    /// Creates a new sampling grid with a given size
-    pub fn new_with_size(width: usize, height: usize) -> Self {
-        let node = KalmanNode::default();
-        SampleGrid {
-            sample_grid: matrix![node; height, width],
-            ground_truth: BitPackedGrid::new(width, height),
-            width,
-            height,
-        }
-    }
-
-    /// Creates a sampling grid from a string
-    pub fn new_from_string(map: String) -> Self {
-        let mut grid = create_map_from_string(map, SampleGrid::new_with_size, |grid, x, y| {
-            grid.sample_grid[x][y].state = 1.0;
-        });
-        grid.init_ground_truth(); // These aren't good practice as they are an
-        grid
-    }
-
-    /// Creates a sampling grid from a file
-    pub fn new_from_file(filename: &str) -> Self {
-        let s = std::fs::read_to_string(filename).expect("Unable to read file");
-        SampleGrid::new_from_string(s)
-    }
-
     /// Initializes an area of the bitfield from the sampling grid values, where
     /// 0.0 indicates a guaranteed obstacles and (0,1) indicates a probability
     pub fn init_gridmap_area<'a>(
@@ -78,7 +79,7 @@ impl SampleGrid {
     ) {
         for x in x..x + width {
             for y in y..y + height {
-                gridmap.set_bit_value((x, y), self.sample_grid[x][y].state != 0.0);
+                gridmap.set_value((x, y), self.sample_grid[x][y].state != 0.0);
             }
         }
     }
@@ -104,7 +105,7 @@ impl SampleGrid {
         for x in 0..self.width {
             for y in 0..self.height {
                 self.ground_truth
-                    .set_bit_value((x, y), self.sample_grid[x][y].state != 0.0);
+                    .set_value((x, y), self.sample_grid[x][y].state != 0.0);
             }
         }
     }
@@ -119,7 +120,7 @@ impl SampleGrid {
     pub fn sample<'a>(&self, gridmap: &'a mut BitPackedGrid, (x, y): (usize, usize)) -> bool {
         let value = self.sample_grid[x][y].state != 0.0
             && rand::random::<f32>() < self.sample_grid[x][y].state;
-        gridmap.set_bit_value((x, y), value);
+        gridmap.set_value((x, y), value);
         value
     }
 
@@ -173,7 +174,7 @@ impl SampleGrid {
     /// * `(x, y)` - The coordinate of the cell
     /// * `measurement_covariance` - The variance of the measurement where 0.0 is a perfect measurement
     pub fn update_node(&mut self, (x, y): (usize, usize), measurement_covariance: f32) {
-        let measurement = self.ground_truth.get_bit_value((x, y)) as u8 as f32;
+        let measurement = self.ground_truth.get_value((x, y)) as u8 as f32;
         self.sample_grid[x][y].update(measurement, measurement_covariance);
     }
 
@@ -248,32 +249,22 @@ impl SampleGrid {
     ) -> Vec<((usize, usize), usize)> {
         super::neighbors(x, y, false)
             .filter(move |(x, y)| {
-                if self.bound_check((*x, *y)) && !sampled_before.get_bit_value((*x, *y)) {
-                    sampled_before.set_bit_value((*x, *y), true);
+                if self.bound_check((*x, *y)) && !sampled_before.get_value((*x, *y)) {
+                    sampled_before.set_value((*x, *y), true);
                     self.sample(gridmap, (*x, *y))
                 } else {
-                    gridmap.get_bit_value((*x, *y))
+                    gridmap.get_value((*x, *y))
                 }
             })
             .map(|n| (n, 1))
             .collect()
-    }
-
-    /// Prints the sampling cell grid for debugging
-    pub fn print_sampling_cells(&self, path: Option<Vec<(usize, usize)>>) -> String {
-        print_cells(
-            self.width,
-            self.height,
-            |x, y| self.sample_grid[x][y].state != 0.0,
-            path,
-        )
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::{
-        domains::bitpackedgrid::BitPackedGrid,
+        domains::{bitpackedgrid::BitPackedGrid, Domain, DomainCreate, DomainPrint},
         matrix,
         util::matrix::{gaussian_kernal, Matrix},
     };
@@ -282,7 +273,7 @@ mod tests {
 
     #[test]
     fn test_samplegrid_new() {
-        let grid = SampleGrid::new_with_size(128, 128);
+        let grid = SampleGrid::new(128, 128);
         assert_eq!(grid.height, 128);
         assert_eq!(grid.width, 128);
         assert_eq!(grid.sample_grid.height, 128);
@@ -298,9 +289,11 @@ mod tests {
     }
 
     #[test]
-    fn test_samplegrid_create() {
+    fn test_samplegrid_new_from_string() {
         let map_str = ".....\n@@.@.\n.@.@.\n.@.@.\n.....\n....@\n";
-        let grid = SampleGrid::new_from_string(map_str.to_string());
+        let mut grid = SampleGrid::new_from_string(map_str.to_string());
+        grid.init_ground_truth();
+        assert_eq!(grid.print_cells(None), map_str);
         assert_eq!(grid.ground_truth.print_cells(None), map_str);
         assert_eq!(grid.sample_grid[0][0].state, 1.0);
         assert_eq!(grid.sample_grid[1][0].state, 1.0);

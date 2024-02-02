@@ -11,7 +11,7 @@ use rayon::prelude::*;
 use std::sync::{Arc, Mutex};
 
 use crate::{
-    domains::{bitpackedgrid::BitPackedGrid, samplegrid::SampleGrid},
+    domains::{bitpackedgrid::BitPackedGrid, samplegrid::SampleGrid, Domain},
     heuristics::distance::manhattan_distance,
     util::{filter::KalmanNode, matrix::Matrix},
 };
