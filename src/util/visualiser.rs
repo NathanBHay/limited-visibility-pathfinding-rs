@@ -65,7 +65,7 @@ impl Visualiser {
         iteration: usize,
         current: Option<(usize, usize)>,
         next: Option<(usize, usize)>,
-        paths: &HashMap<(usize, usize), usize>,
+        paths: Vec<((usize, usize), usize)>,
         stats: Vec<String>,
     ) {
         let sample_grid = json!({
@@ -93,7 +93,7 @@ impl Visualiser {
             *paths.entry(node).or_insert(0) += 1;
         }
         let sample_grid = json!({
-            "path": create_pathlist(&paths),
+            "path": create_pathlist(paths.into_iter().collect()),
             "length": final_path.len(),
         });
         let mut file = File::create(format!("{}_final_path.json", self.file_path)).unwrap();
@@ -118,7 +118,7 @@ fn get_sample_grid(grid: Option<&SampleGrid>) -> Vec<Vec<f32>> {
     }
 }
 
-fn create_pathlist<K: Clone>(map: &HashMap<K, usize>) -> Vec<(K, f32)> {
+fn create_pathlist<K: Clone>(map: Vec<(K, usize)>) -> Vec<(K, f32)> {
     let max = map.iter().map(|(_, w)| *w).max().unwrap_or(1) as f32;
     map.iter()
         .map(|(k, w)| (k.clone(), *w as f32 / max))

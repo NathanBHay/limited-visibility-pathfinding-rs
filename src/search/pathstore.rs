@@ -22,16 +22,14 @@ pub trait PathStore<N: Send, W: Send>: Send {
     /// Get the best node to explore next, reaturns none if no node is found
     fn next_node(&self, nodes: Vec<N>) -> Option<N>;
 
-    /// Get the store's possible paths
-    fn get_paths(&self) -> &HashMap<N, W>;
-
     /// Get the weight of a given node
     fn get(&self, node: &N) -> Option<&W>;
 
     /// Get length of store
-    fn len(&self) -> usize {
-        self.get_paths().len()
-    }
+    fn len(&self) -> usize;
+
+    /// Get the paths stored in the store
+    fn visualise(&self) -> Vec<(N, W)>;
 }
 
 /// A store which accumulates the number of times a node has been visited,
@@ -57,7 +55,7 @@ impl<N: Eq + Hash + Send, W: Send> AccStore<N, W> {
 
 impl<N, W> PathStore<N, W> for AccStore<N, W> 
 where
-    N: Eq + Hash + Send,
+    N: Clone + Eq + Hash + Send,
     W: Add<Output = W> + Clone + Default + Ord + Send
 {
     fn reinitialize(&mut self) {
@@ -77,12 +75,16 @@ where
             .max_by_key(|n| self.store.get(n).unwrap())
     }
 
-    fn get_paths(&self) -> &HashMap<N, W> {
-        &self.store
+    fn len(&self) -> usize {
+        self.store.len()
     }
 
     fn get(&self, node: &N) -> Option<&W> {
         self.store.get(node)
+    }
+
+    fn visualise(&self) -> Vec<(N, W)> {
+        self.store.iter().map(|(n, w)| (n.clone(), w.clone())).collect()
     }
 }
 
@@ -90,5 +92,58 @@ impl<N: Eq + Hash + Send> AccStore<N, usize> {
     /// Create a Acc Store that counts the number of times a node has been visited
     pub fn new_count_store() -> Self {
         AccStore::new(Box::new(|_| 1))
+    }
+}
+
+/// Keeps a store of only the best path to a given node 
+pub struct GreedyStore<N: Eq + Hash + Send, W: Send> {
+    store: Vec<N>,
+    weight: Option<W>,
+    heuristic: Box<dyn Fn(&N) -> W + Send>,
+}
+
+impl<N: Eq + Hash + Send, W: Send> GreedyStore<N, W> {
+    /// Create a new greedy store
+    pub fn new(heuristic: Box<dyn Fn(&N) -> W + Send>) -> Self {
+        Self {
+            store: Vec::new(),
+            weight: None,
+            heuristic,
+        }
+    }
+}
+
+impl<N, W> PathStore<N, W> for GreedyStore<N, W> 
+where
+    N: Clone + Eq + Hash + Send + core::fmt::Debug,
+    W: Clone + Default + Ord + Send
+{
+    fn reinitialize(&mut self) {
+        self.store.clear();
+        self.weight = None;
+    }
+
+    fn add_path(&mut self, path: Vec<N>, _weight: W) {
+        self.store = path;
+        if let Some(node) = self.store.first() {
+            println!("Node: {:?}", node);
+            self.weight = Some((self.heuristic)(node));
+        }
+    }
+
+    fn next_node(&self, nodes: Vec<N>) -> Option<N> {
+        nodes.into_iter().find(|n| self.store.first() == Some(n))
+    }
+
+    fn get(&self, _node: &N) -> Option<&W> {
+        self.weight.as_ref()
+    }
+
+    fn len(&self) -> usize {
+        self.store.len()
+    }
+
+    fn visualise(&self) -> Vec<(N, W)> {
+        self.store.iter().map(|n| (n.clone(), self.weight.clone().unwrap())).collect()
     }
 }

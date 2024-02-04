@@ -97,11 +97,9 @@ impl SampleStar {
                 |_| 0,
                 |n| *n,
             );
-            println!("{:?}", path.len());
             let found_path = path.last() == Some(&self.goal);
             let no_valid_paths = *valid_paths.lock().unwrap() == 0;
             if no_valid_paths && found_path { // This could be removed if you want to keep data
-                println!("Reinitializing");
                 self.no_path_store.lock().unwrap().reinitialize();
                 self.stats.lock().unwrap().clear();
             }
