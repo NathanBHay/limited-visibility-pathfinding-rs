@@ -9,93 +9,41 @@ use super::linedrawing::bresenham;
 use crate::matrix;
 use crate::util::matrix::Matrix;
 
-/// Raycast to produce a matrix of visibility where 1 indicates visibility
+/// Raycast to produce a matrix of visibility where 1 indicates visibility, uses 
+/// Bresenham's line algorithm to calculate the raycast.
 pub fn raycast_matrix(
-    (x, y): (usize, usize),
+    (x, y): (isize, isize),
     radius: usize,
-    mut visibility_check: impl FnMut(usize, usize) -> bool,
-    bounds_check: impl Fn(usize, usize) -> bool,
+    visibility_check: impl Fn((isize, isize)) -> bool,
+    bounds_check: impl Fn((isize, isize)) -> bool
 ) -> Matrix<bool> {
-    let mut visible: Vec<(usize, usize)> = Vec::new();
-    let (ix, iy) = (x as i32, y as i32);
-    let r = radius as i32;
+    let mut visible: Vec<(isize, isize)> = Vec::new();
+    let r = radius as isize;
     for i in 0..2 * r {
-        let positions: [(i32, i32); 4] = [
-            (ix - r + i, iy - r),
-            (ix + r, iy - r + i),
-            (ix + r - i, iy + r),
-            (ix - r, iy + r - i),
+        let positions: [(isize, isize); 4] = [
+            (x - r + i, y - r),
+            (x + r, y - r + i),
+            (x + r - i, y + r),
+            (x - r, y + r - i),
         ];
-        for (px, py) in positions
-            .iter()
-            .filter(|(x, y)| x >= &0 && y >= &0 && bounds_check(*x as usize, *y as usize))
-        {
+        for (px, py) in positions.iter() {
             visible.extend(
-                bresenham((x, y), (*px as usize, *py as usize), &mut visibility_check).iter(),
+                bresenham((x, y), (*px, *py), &visibility_check, &bounds_check).iter(),
             );
         }
     }
     let mut visible_matrix = matrix![false; 2*radius+1, 2*radius+1];
-    for (x, y) in visible
+    for (y, x) in visible
         .iter()
-        .map(|(xi, yi)| (xi + radius - x, yi + radius - y))
+        .map(|(xi, yi)| (xi + r - x, yi + r - y))
     {
-        visible_matrix[y][x] = true;
+        visible_matrix[x as usize][y as usize] = true;
     }
     visible_matrix
 }
 
-/// Raycasting approach to field of vision
-pub fn raycasting(
-    (x, y): (usize, usize),
-    radius: usize,
-    visibility_check: impl FnMut(usize, usize) -> bool,
-) -> Vec<(usize, usize)> {
-    raycasting_with_dist((x, y), radius, visibility_check, |_| 1)
-        .iter()
-        .map(|(p, _)| *p)
-        .collect::<Vec<_>>()
-}
-
-pub fn raycasting_with_dist(
-    (x, y): (usize, usize),
-    radius: usize,
-    mut visibility_check: impl FnMut(usize, usize) -> bool,
-    visibility_func: impl Fn(usize) -> usize,
-) -> Vec<((usize, usize), usize)> {
-    let mut visible = HashMap::new();
-    let visibility_kernal = (0..=radius).map(visibility_func).collect::<Vec<_>>();
-    for i in 0..2 * radius {
-        let positions = [
-            (
-                x.saturating_sub(radius).saturating_add(i),
-                y.saturating_sub(radius),
-            ),
-            (
-                x.saturating_add(radius),
-                y.saturating_sub(radius).saturating_add(i),
-            ),
-            (
-                x.saturating_add(radius).saturating_sub(i),
-                y.saturating_add(radius),
-            ),
-            (
-                x.saturating_sub(radius),
-                y.saturating_add(radius).saturating_sub(i),
-            ),
-        ];
-        for position in positions.iter() {
-            visible.extend(
-                bresenham((x, y), *position, &mut visibility_check)
-                    .iter()
-                    .zip(visibility_kernal.iter()),
-            );
-        }
-    }
-    visible.into_iter().collect::<Vec<_>>()
-}
-
 /// Shadowcasting implementation for field of view
+/// 
 /// Adapted from java versions found at:
 /// https://www.roguebasin.com/index.php/Improved_Shadowcasting_in_Java
 pub fn shadowcasting(
@@ -134,8 +82,7 @@ pub fn shadowcasting(
     light_map.into_iter().collect()
 }
 
-/// This is a helper function for shadowcasting that recursively casts
-/// light.
+/// This is a helper function for shadowcasting that recursively casts light.
 fn lightcast(
     (x, y): (usize, usize),
     row: usize,
@@ -209,27 +156,45 @@ fn lightcast(
 
 #[cfg(test)]
 mod tests {
+    use crate::{domains::{bitpackedgrid::BitPackedGrid, Domain, DomainCreate}, matrix, util::matrix::Matrix};
 
-    use super::{raycast_matrix, raycasting, shadowcasting};
-
-    #[test]
-    fn test_raycasting() {
-        let visibility_all = raycasting((10, 10), 2, |_, _| true);
-        assert_eq!(visibility_all.len(), 25);
-        let visibility_top_obstacle = raycasting((10, 10), 2, |x, y| (x, y) != (10, 9));
-        assert_eq!(visibility_top_obstacle.len(), 21);
-    }
+    use super::{raycast_matrix, shadowcasting};
 
     #[test]
     fn test_raycast_matrix() {
-        let visibility_all = raycast_matrix((10, 10), 2, |_, _| true, |_, _| true);
+        let visibility_all = raycast_matrix((10, 10), 2, |_| true, |_| true);
         assert_eq!(visibility_all.data.iter().filter(|x| **x).count(), 25);
         let visibility_top_obstacle =
-            raycast_matrix((10, 10), 2, |x, y| (x, y) != (10, 9), |_, _| true);
+            raycast_matrix(
+                (10, 10), 
+                2, 
+                |n| n != (10, 9),
+                |n| n < (20, 20)
+            );
         assert_eq!(
             visibility_top_obstacle.data.iter().filter(|x| **x).count(),
-            21
+            22
         );
+    }
+
+    #[test]
+    fn test_raycast_on_grid() {
+        let grid = BitPackedGrid::new_from_string(
+            ".....\n.###.\n.#...\n.#.#.\n...#.".to_string(),
+        );
+        let visibility = raycast_matrix(
+            (2, 2), 
+            2, 
+            |(x, y)| grid.get_value((x as usize, y as usize)), 
+            |(x, y)| grid.bounds_check((x as usize, y as usize))
+        );
+        assert_eq!(visibility, matrix![
+            [false, false, false, false, false],
+            [false, true, true, true, true],
+            [false, true, true, true, true],
+            [false, true, true, true, true],
+            [false, true, true, true, false],
+        ]);
     }
 
     #[test]
@@ -239,14 +204,5 @@ mod tests {
         let visibility_top_obstacle =
             shadowcasting((10, 10), 2, |_, _| true, |x, y| (x, y) != (10, 9));
         assert_eq!(visibility_top_obstacle.len(), 24);
-    }
-
-    #[test]
-    fn test_raycasting_with_func() {
-        let visibility_all: usize = super::raycasting_with_dist((10, 10), 1, |_, _| true, |x| x)
-            .iter()
-            .map(|(_, c)| c)
-            .sum();
-        assert_eq!(visibility_all, 8);
     }
 }

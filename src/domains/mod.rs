@@ -15,7 +15,8 @@ pub mod edgelist;
 pub mod hashedgrid;
 pub mod samplegrid;
 
-/// Trait that 
+/// Trait that represents a domain that can be used with search algorithms.
+/// A domain is a map of cells where each cell can be traversable or an obstacle.
 pub trait Domain {
     /// Creates a new map with a given width and height
     fn new(width: usize, height: usize) -> Self;
@@ -28,7 +29,7 @@ pub trait Domain {
     /// false if it is an obstacle.
     fn get_value(&self, n: (usize, usize)) -> bool;
 
-    /// Get shape of the data listed in widht, height format.
+    /// Get shape of the data listed in width, height format.
     fn shape(&self) -> (usize, usize);
 }
 

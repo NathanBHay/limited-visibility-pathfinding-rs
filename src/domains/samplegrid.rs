@@ -5,6 +5,8 @@ use crate::matrix;
 use crate::util::filter::KalmanNode;
 use crate::util::matrix::{convolve2d, matrix_overlay, ConvResolve, Matrix};
 
+/// A grid that allows for the sampling of cells. It uses a series of Kalman filters for updates
+/// to the individual cells.
 pub struct SampleGrid {
     /// The sampling grid which determines the probability of a cell being occupied.
     /// It has a value between 0.0 and 1.0
@@ -32,6 +34,9 @@ impl Domain for SampleGrid {
 
     fn set_value(&mut self, (x, y): (usize, usize), value: bool) {
         self.sample_grid[x][y].state = if value { 1.0 } else { 0.0 };
+        // This is a little counter intuitive but it is assumed that if you use set value you're
+        // setting both values, this is to allow new_from_file without having to init_ground_truth
+        self.ground_truth.set_value((x, y), value);
     }
 
     fn get_value(&self, (x, y): (usize, usize)) -> bool {
@@ -116,6 +121,21 @@ impl SampleGrid {
         self.sample_grid = convolve2d(&self.sample_grid, kernel, ConvResolve::Nearest);
     }
 
+    /// Get value above the threshold for the sampling grid
+    pub fn get_threshold_value(&self, (x, y): (usize, usize)) -> bool {
+        self.bound_check((x, y)) && self.sample_grid[x][y].state > Self::NEAREST_THRESHOLD
+    }
+
+    /// Get Visibility of the sample grid
+    pub fn visibility(&self, (x, y): (usize, usize), radius: usize) -> Matrix<bool> {
+        raycast_matrix(
+            (x as isize, y as isize),
+            radius,
+            |(x, y)| self.get_threshold_value((x as usize, y as usize)),
+            |(x, y)| self.bound_check((x as usize, y as usize)),
+        )
+    }
+
     /// Samples a cell with a given chance
     pub fn sample<'a>(&self, gridmap: &'a mut BitPackedGrid, (x, y): (usize, usize)) -> bool {
         let value = self.sample_grid[x][y].state != 0.0
@@ -180,47 +200,45 @@ impl SampleGrid {
 
     /// Creates a kernel for the adjacency of a point. Used to update nodes with
     /// matrix representing covariance.
-    pub fn adjacency_kernel(kernel: &Matrix<f32>) -> Matrix<f32> {
-        let mut kernel = kernel.clone();
-        let radius = kernel.width / 2;
-        kernel[radius][radius] = 0.0;
-        kernel[radius.saturating_sub(1)][radius] = 0.0; // This is to ensure that
-        kernel[radius][radius.saturating_sub(1)] = 0.0; // the center's measurements
-        kernel[radius.saturating_add(1)][radius] = 0.0; // are always correct
-        kernel[radius][radius.saturating_add(1)] = 0.0;
+    fn adjacency_kernel(kernel: &Matrix<f32>) -> Matrix<Option<f32>> {
+        let mut kernel = Matrix {
+            data: kernel.data.iter().map(|x| Some(*x)).collect(),
+            width: kernel.width,
+            height: kernel.height,
+        };
+        let dx = kernel.width / 2;
+        let dy = kernel.height / 2;
+        kernel[dx][dy] = Some(0.0);
+        kernel[dx.saturating_sub(1)][dy] = Some(0.0); // This is to ensure that
+        kernel[dx][dy.saturating_sub(1)] = Some(0.0); // the center's measurements
+        kernel[dx.saturating_add(1)][dy] = Some(0.0); // are always correct
+        kernel[dx][dy.saturating_add(1)] = Some(0.0);
         kernel
     }
 
-    /// Updates nodes based upon a kernal
-    fn update_kernel(&mut self, (x, y): (usize, usize), kernel: Matrix<f32>) {
-        let kernel_size = (kernel.width, kernel.height);
-        for (n, (i, j)) in matrix_overlay((self.width, self.height), kernel_size, (x, y)) {
-            self.update_node(n, kernel[i][j]);
+    fn adjacent_override(&mut self, (x, y): (usize, usize)) {
+        for (i, j) in self.adjacent((x, y), false) {
+            self.sample_grid[i][j].state = self.ground_truth.get_value((i, j)) as u8 as f32;
         }
     }
 
-    /// Updates nodes based upon a radius
-    pub fn update_radius(&mut self, (x, y): (usize, usize), kernel: &Matrix<f32>) {
-        let kernel = SampleGrid::adjacency_kernel(kernel);
-        self.update_kernel((x, y), kernel);
+    /// Updates nodes based upon a kernal
+    fn update_kernel(&mut self, (x, y): (usize, usize), kernel: Matrix<Option<f32>>) {
+        let kernel_size = (kernel.width, kernel.height);
+        for (n, (i, j)) in matrix_overlay((self.width, self.height), kernel_size, (x, y)) {
+            if kernel[j][i].is_some() {
+                self.update_node(n, kernel[j][i].unwrap());
+            }
+        }
     }
 
     /// Updates nodes based on visibile nodes
     pub fn raycast_update(&mut self, (x, y): (usize, usize), kernel: &Matrix<f32>) {
         let mut kernel = SampleGrid::adjacency_kernel(kernel);
-
-        let visible = raycast_matrix(
-            (x, y),
-            kernel.width / 2,
-            |x, y| {
-                self.sample_grid[x.min(self.width - 1)][y.min(self.height - 1)].state
-                    > Self::NEAREST_THRESHOLD
-            },
-            |x, y| self.bound_check((x, y)),
-        );
+        let visible = self.visibility((x, y), kernel.width / 2);
         for (k, v) in kernel.data.iter_mut().zip(visible.data.iter()) {
             if !*v {
-                *k = 1.0;
+                *k = None;
             }
         }
         self.update_kernel((x, y), kernel);
@@ -236,8 +254,8 @@ impl SampleGrid {
         &self,
         (x, y): (usize, usize),
         diagonal: bool,
-    ) -> impl Iterator<Item = (usize, usize)> + '_ {
-        super::neighbors(x, y, diagonal).filter(|(x, y)| self.bound_check((*x, *y)))
+    ) -> Vec<(usize, usize)> {
+        super::neighbors(x, y, diagonal).filter(|(x, y)| self.bound_check((*x, *y))).collect()
     }
 
     /// Samples all adjacent cells on sampling grid
@@ -291,8 +309,7 @@ mod tests {
     #[test]
     fn test_samplegrid_new_from_string() {
         let map_str = ".....\n@@.@.\n.@.@.\n.@.@.\n.....\n....@\n";
-        let mut grid = SampleGrid::new_from_string(map_str.to_string());
-        grid.init_ground_truth();
+        let grid = SampleGrid::new_from_string(map_str.to_string());
         assert_eq!(grid.print_cells(None), map_str);
         assert_eq!(grid.ground_truth.print_cells(None), map_str);
         assert_eq!(grid.sample_grid[0][0].state, 1.0);
@@ -305,7 +322,6 @@ mod tests {
         let mut grid = SampleGrid::new_from_string("@....\n.....\n.....\n.....\n".to_string());
         let mut gridmap = BitPackedGrid::new(grid.width, grid.height);
         grid.init_gridmap_radius(&mut gridmap, (0, 0), 2);
-        grid.init_ground_truth();
         assert_eq!(
             grid.ground_truth.print_cells(None),
             "@....\n.....\n.....\n.....\n"
@@ -328,4 +344,60 @@ mod tests {
             ]
         );
     }
+
+    #[test]
+    fn test_sample() {
+        let mut grid = SampleGrid::new(8, 8);
+        grid.sample_grid[0][0].state = 1.0;
+        grid.sample_grid[2][4].state = 1.0;
+        grid.sample_grid[1][6].state = 1.0;
+        let mut gridmap = BitPackedGrid::new(grid.width, grid.height);
+        grid.sample(&mut gridmap, (0, 0));
+        assert_eq!(gridmap.get_value((0, 0)), true);
+        grid.sample_all(&mut gridmap);
+        assert_eq!(gridmap.count_ones(), 3);
+    }
+
+    #[test]
+    fn test_adjacency_kernel() {
+        let kernel = SampleGrid::adjacency_kernel(&matrix![1.0; 3]);
+        assert_eq!(
+            kernel, 
+            matrix![
+                [Some(1.0), Some(0.0), Some(1.0)],
+                [Some(0.0), Some(0.0), Some(0.0)],
+                [Some(1.0), Some(0.0), Some(1.0)],
+            ]
+        )
+    }
+
+    #[test]
+    fn test_grid_visibility() {
+        let grid = SampleGrid::new_from_string("\n@@@.\n@...\n@.@.\n".to_string());
+        let visiblility = grid.visibility((1, 1), 2);
+        println!("{}", visiblility);
+        assert_eq!(visiblility, matrix![
+            [false, false, false, false, false],
+            [false, true, true, true, true],
+            [false, true, true, true, true],
+            [false, true, true, true, true],
+            [false, false, false, false, false],
+        ]);
+    }
+
+    #[test]
+    fn test_raycast_update() {
+        let mut grid = SampleGrid::new_from_string(".@..\n.@.@\n.@.@\n".to_string());
+        for n in grid.sample_grid.data.iter_mut() {
+            if n.state == 1.0 {
+                n.state = 0.6;
+            }
+        }
+        grid.raycast_update((0, 0), &matrix![0.0; 5]);
+        assert!(grid.sample_grid[0][0].state == 1.0);
+        assert!(grid.sample_grid[0][1].state == 1.0);
+        assert!(grid.sample_grid[1][0].state == 0.0);
+        assert!(grid.sample_grid[2][0].state == 0.6);
+    }
 }
+    
