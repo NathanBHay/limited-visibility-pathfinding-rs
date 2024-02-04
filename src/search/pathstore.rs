@@ -22,14 +22,16 @@ pub trait PathStore<N: Send, W: Send>: Send {
     /// Get the best node to explore next, reaturns none if no node is found
     fn next_node(&self, nodes: Vec<N>) -> Option<N>;
 
-    /// Check if node is in store
-    fn contains(&self, node: &N) -> bool;
-
     /// Get the store's possible paths
     fn get_paths(&self) -> &HashMap<N, W>;
 
     /// Get the weight of a given node
     fn get(&self, node: &N) -> Option<&W>;
+
+    /// Get length of store
+    fn len(&self) -> usize {
+        self.get_paths().len()
+    }
 }
 
 /// A store which accumulates the number of times a node has been visited,
@@ -40,11 +42,16 @@ pub struct AccStore<N: Eq + Hash + Send, W: Send> {
 }
 
 impl<N: Eq + Hash + Send, W: Send> AccStore<N, W> {
+    /// Create a new accumulating store
     pub fn new(heuristic: Box<dyn Fn(&W) -> W + Send>) -> Self {
         Self {
             store: HashMap::new(),
             heuristic,
         }
+    }
+    /// Check if the store contains a given node
+    fn contains(&self, node: &N) -> bool {
+        self.store.contains_key(node)
     }
 }
 
@@ -68,10 +75,6 @@ where
         nodes.into_iter()
             .filter(|n| self.contains(n))
             .max_by_key(|n| self.store.get(n).unwrap())
-    }
-
-    fn contains(&self, node: &N) -> bool {
-        self.store.contains_key(node)
     }
 
     fn get_paths(&self) -> &HashMap<N, W> {

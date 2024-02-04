@@ -3,7 +3,7 @@
 pub type Problem = (&'static str, &'static str, (usize, usize), (usize, usize));
 pub const BASIC: Problem = ("Basic", "tests/basic.map", (1, 1), (30, 30));
 pub const MAP: Problem = ("Map", "tests/map.map", (225, 225), (70, 40));
-pub const FILL: Problem = ("Fill", "tests/fill.map", (3, 1), (3, 6));
+pub const FILL: Problem = ("Fill", "tests/fill.map", (4, 1), (4, 6));
 pub const WALL: Problem = ("Wall", "tests/wall.map", (3, 1), (3, 6));
 pub const CACAVERNS: Problem = ("Caverns", "tests/ca_caverns1.map", (122, 595), (200, 15));
 pub const DRYWATER: Problem = ("Drywater", "tests/drywatergulch.map", (175, 315), (320, 125));

@@ -8,7 +8,7 @@
 //! `self.grid.sample_grid[x][y].state * manhattan_distance(n*, self.goal)`
 
 use rayon::prelude::*;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use crate::{
     domains::{bitpackedgrid::BitPackedGrid, samplegrid::SampleGrid, Domain},
@@ -39,8 +39,8 @@ pub struct SampleStar {
     epoch: usize,
     kernel: Matrix<f32>,
     pub final_path: Vec<(usize, usize)>,
-    pub path_store: Arc<Mutex<PathStoreT>>,
-    path_to_goal: Arc<Mutex<bool>>,
+    path_store: Arc<Mutex<PathStoreT>>,
+    no_path_store: Arc<Mutex<PathStoreT>>,
     pub stats: Arc<Mutex<SampleStarStats>>,
 }
 
@@ -53,6 +53,7 @@ impl SampleStar {
         epoch: usize,
         kernel: Matrix<f32>,
         path_store: PathStoreT,
+        no_path_store: PathStoreT,
         stats: SampleStarStats,
     ) -> Self {
         assert!(grid.bound_check(start) && grid.bound_check(goal));
@@ -65,8 +66,8 @@ impl SampleStar {
             kernel,
             final_path: vec![start],
             path_store: Arc::new(Mutex::new(path_store)),
+            no_path_store: Arc::new(Mutex::new(no_path_store)),
             stats: Arc::new(Mutex::new(stats)),
-            path_to_goal: Arc::new(Mutex::new(false)),
         }
     }
 
@@ -76,9 +77,11 @@ impl SampleStar {
             return true;
         }
         self.path_store.lock().unwrap().reinitialize();
-        *self.path_to_goal.lock().unwrap() = false;
+        self.no_path_store.lock().unwrap().reinitialize();
         self.stats.lock().unwrap().clear();
         self.grid.raycast_update(self.current, &self.kernel);
+        // Keeping a seperate count should allow for less contention on the lock
+        // as path_store.len() is unneccesary.
         let valid_paths = Arc::new(Mutex::new(0));
         (0..self.epoch).into_par_iter().for_each(|_| {
             let mut gridmap = BitPackedGrid::new(self.grid.width, self.grid.height);
@@ -94,50 +97,62 @@ impl SampleStar {
                 |_| 0,
                 |n| *n,
             );
-            // TODO: Make these conditions more readable && efficient
-            // Fix update to ensure adjacent nodes have 100% accuracy
-
-            // The path_store acts as a store to the best path until a store to the goal is
-            // found, then it acts as a store to the goal
+            println!("{:?}", path.len());
             let found_path = path.last() == Some(&self.goal);
-            let clear = found_path && !*self.path_to_goal.lock().unwrap();
-            if clear {
-                *self.path_to_goal.lock().unwrap() = true;
-            } 
-            {
-                let mut stats = self.stats.lock().unwrap();
-                if clear {
-                    *valid_paths.lock().unwrap() = 0;
-                    stats.clear();
-                }
-                if found_path == *self.path_to_goal.lock().unwrap() {
-                    stats.run_path_stats(&self.grid, &path);
-                    stats.add(1, sampled_before.count_ones() as f32);
-                    stats.add(2, weight as f32);
-                    *valid_paths.lock().unwrap() += 1;
-                }
+            let no_valid_paths = *valid_paths.lock().unwrap() == 0;
+            if no_valid_paths && found_path { // This could be removed if you want to keep data
+                println!("Reinitializing");
+                self.no_path_store.lock().unwrap().reinitialize();
+                self.stats.lock().unwrap().clear();
+            }
+            if found_path {
+                *valid_paths.lock().unwrap() += 1;
             }
             {
-                let mut path_store = self.path_store.lock().unwrap();
-                if clear {
-                    path_store.reinitialize();
-                }
-                if found_path == *self.path_to_goal.lock().unwrap() {
-                    path_store.add_path(path, weight);
-                }
+                let mut stats = self.stats.lock().unwrap();
+                stats.run_path_stats(&self.grid, &path);
+                stats.add(1, sampled_before.count_ones() as f32);
+                stats.add(2, weight as f32);
+            }
+            if found_path {
+                self.path_store.lock().unwrap().add_path(path, weight);
+            } else if no_valid_paths {
+                self.no_path_store.lock().unwrap().add_path(path, weight);
             }
         });
         self.previous = self.current;
-        let adj = self.grid.adjacent(self.current, false).collect::<Vec<_>>();
-        let path_store = self.path_store.lock().unwrap();
-        let mut stats = self.stats.lock().unwrap();
+        let adj = self.grid.adjacent(self.current, false);
         let valid_paths = valid_paths.lock().unwrap();
+        let path_store = if *valid_paths > 0 {
+            self.path_store.lock().unwrap()
+        } else {
+            self.no_path_store.lock().unwrap()
+        };
+        let mut stats = self.stats.lock().unwrap();
         stats.add(0, *valid_paths as f32);
         stats.collate_path_stats(*valid_paths);
         stats.run_step_stats(&path_store, &adj);
         self.current = path_store.next_node(adj).unwrap_or(self.current);
+
+        // Bump mechanics are done to avoid walking into walls. This is necessary as the
+        // kalman updating procedure doesn't overide the value of adjacenct cells. This
+        // means there are cases where the path store will return a path that walks into
+        // a wall. To change from bump mechanics to override mechanics delete this and 
+        // add code that sets the adjacent cells to the ground truth.
+        if !self.grid.ground_truth.get_value(self.current) {
+            self.current = self.previous;
+        }
         self.final_path.push(self.current);
         false
+    }
+
+    /// Get the path store that should be used
+    pub fn get_path_store(&self) -> MutexGuard<'_, Box<dyn PathStore<(usize, usize), usize>>> {
+        if self.path_store.lock().unwrap().len() > 0 {
+            self.path_store.lock().unwrap()
+        } else {
+            self.no_path_store.lock().unwrap()
+        }
     }
 
     /// Calculate the number of samples needed to achieve a confidence interval
