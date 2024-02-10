@@ -29,7 +29,7 @@ pub type PathStoreT = Box<dyn PathStore<(usize, usize), usize>>;
 /// * `kernel` - The kernel to sample with.
 /// * `path_store` - The path store to store the paths.
 /// * `no_path_store` - The path store to store the paths that don't reach the goal
-/// * `stats` - The statistics store to store the stats. Currently built into the 
+/// * `stats` - The statistics store to store the stats. Currently built into the
 /// algorithm however it could be moved out. This is due to the fact search results
 /// aren't stored so stats are calculated on the fly.
 pub struct SampleStar<S: BestSearch<(usize, usize), usize> + Sync> {
@@ -101,7 +101,8 @@ impl<S: BestSearch<(usize, usize), usize> + Sync> SampleStar<S> {
             );
             let found_path = path.last() == Some(&self.goal);
             let no_valid_paths = *valid_paths.lock().unwrap() == 0;
-            if no_valid_paths && found_path { // This could be removed if you want to keep data
+            if no_valid_paths && found_path {
+                // This could be removed if you want to keep data
                 self.no_path_store.lock().unwrap().reinitialize();
                 self.stats.lock().unwrap().clear();
             }
@@ -137,7 +138,7 @@ impl<S: BestSearch<(usize, usize), usize> + Sync> SampleStar<S> {
         // Bump mechanics are done to avoid walking into walls. This is necessary as the
         // kalman updating procedure doesn't overide the value of adjacenct cells. This
         // means there are cases where the path store will return a path that walks into
-        // a wall. To change from bump mechanics to override mechanics delete this and 
+        // a wall. To change from bump mechanics to override mechanics delete this and
         // add code that sets the adjacent cells to the ground truth.
         if !self.grid.ground_truth.get_value(self.current) {
             self.current = self.previous;
@@ -173,4 +174,23 @@ impl<S: BestSearch<(usize, usize), usize> + Sync> SampleStar<S> {
     const MARGIN_OF_ERROR: f32 = 0.05;
     const D: f32 = Self::Z / Self::MARGIN_OF_ERROR;
     const DESIGN_EFFECT: f32 = Self::D * Self::D;
+
+    /// Fill the space if there are 3 adjacent cells, stepping backwards. Bad heuristic that is too
+    /// situational to be useful.
+    fn fill_space<E, I>(&mut self) {
+        if self
+            .grid
+            .adjacent(self.current, false)
+            .into_iter()
+            .filter(|n| {
+                !self.grid.get_value(*n) && self.grid.sample_grid[n.0][n.1].covariance == 0.0
+            })
+            .count()
+            == 3
+            && self.previous != self.current
+        {
+            self.grid.set_value(self.previous, true);
+            self.current = self.previous;
+        }
+    }
 }

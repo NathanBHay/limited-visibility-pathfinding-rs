@@ -1,5 +1,8 @@
 use std::{
-    collections::{BTreeMap, BinaryHeap, HashMap, HashSet}, hash::Hash, ops::Add, sync::Arc
+    collections::{BTreeMap, BinaryHeap, HashMap, HashSet},
+    hash::Hash,
+    ops::Add,
+    sync::Arc,
 };
 
 use super::{BestSearch, Search, SearchNode};
@@ -83,11 +86,16 @@ where
     N: Hash + Clone + Eq + Sync,
     C: Ord + Default + Clone + Add<Output = C> + Sync,
 {
-    fn _search<E, I, G>(&self, mut expander: E, start: N, goal: G) -> (HashMap<N, (Option<N>, C)>, Option<N>)
+    fn _search<E, I, G>(
+        &self,
+        mut expander: E,
+        start: N,
+        goal: G,
+    ) -> (HashMap<N, (Option<N>, C)>, Option<N>)
     where
         E: FnMut(&N) -> I,
         I: IntoIterator<Item = (N, C)>,
-        G: Fn(&N) -> bool 
+        G: Fn(&N) -> bool,
     {
         let mut open = FSOpenList(BTreeMap::new());
         open.insert(start.clone(), (self.heuristic)(&start));
@@ -120,7 +128,7 @@ where
                 if !previous.contains_key(&child) || new_cost < previous[&child].1 {
                     previous.insert(child.clone(), (Some(node.clone()), new_cost.clone()));
                     let h = (self.heuristic)(&child);
-                    let child_h = h.clone()+ new_cost.clone();
+                    let child_h = h.clone() + new_cost.clone();
                     open.insert(child.clone(), child_h.clone());
                     // Add to focal list given within the focal range
                     if new_cost <= (self.focal_calc)(&f_min) {
@@ -187,15 +195,8 @@ mod test {
 
     #[test]
     fn test_focal_search() {
-        let results = FocalSearch::new(
-            Arc::new(|x| *x),
-            Arc::new(|x| *x),
-            Arc::new(|x| *x),
-        ).search(
-            |x| vec![(x + 1, 1), (x + 2, 2)],
-            0,
-            |x| *x == 2,
-        );
+        let results = FocalSearch::new(Arc::new(|x| *x), Arc::new(|x| *x), Arc::new(|x| *x))
+            .search(|x| vec![(x + 1, 1), (x + 2, 2)], 0, |x| *x == 2);
         assert_eq!(results.unwrap().0, vec![0, 2]);
     }
 
@@ -209,7 +210,8 @@ mod test {
             Arc::new(|n| manhattan_distance(*n, (4, 4))), // Fix: Dereference the reference to the tuple
             Arc::new(|_| 0),
             Arc::new(|x| *x),
-        ).search(
+        )
+        .search(
             |(x, y)| {
                 grid.adjacent((x.clone(), y.clone()), false)
                     .map(|(x, y)| ((x, y), 1))
