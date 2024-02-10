@@ -375,7 +375,6 @@ mod tests {
     fn test_grid_visibility() {
         let grid = SampleGrid::new_from_string("\n@@@.\n@...\n@.@.\n".to_string());
         let visiblility = grid.visibility((1, 1), 2);
-        println!("{}", visiblility);
         assert_eq!(visiblility, matrix![
             [false, false, false, false, false],
             [false, true, true, true, true],

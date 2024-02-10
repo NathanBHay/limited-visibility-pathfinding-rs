@@ -4,99 +4,110 @@
 //! [Warthog](https://bitbucket.org/dharabor/pathfinding/src/master/), however
 //! is not as optimized and lacks choice of a queue.
 
-use super::{reconstruct_path_with_cost, SearchNode};
+use super::{BestSearch, Search, SearchNode};
 use std::{
-    collections::{BinaryHeap, HashMap, HashSet},
+    collections::{BinaryHeap, HashMap},
     hash::Hash,
-    ops::Add,
+    ops::Add, sync::Arc,
 };
 
 /// A-Star Search
-pub fn astar<E, I, C, N, G, H>(expander: E, start: N, goal: G, heuristic: H) -> Option<(Vec<N>, C)>
+pub struct AStar<N, C>
 where
-    E: FnMut(&N) -> I,
-    I: IntoIterator<Item = (N, C)>,
-    C: Ord + Default + Clone + Add<Output = C>,
-    N: Hash + Clone + Eq,
-    G: Fn(&N) -> bool,
-    H: Fn(&N) -> C,
+    N: Hash + Clone + Eq + Sync,
+    C: Ord + Default + Clone + Add<Output = C> + Sync,
 {
-    astar_with_expanded_set(expander, start, goal, None, heuristic)
+    pub heuristic: Arc<dyn Fn(&N) -> C + Sync + Send>,
 }
 
-/// A-Star Search with added expanded set for debugging
-/// ## Arguments
-/// * `expander` - A function that returns an iterator over the nodes adjacent to a given node
-/// * `start` - The start node
-/// * `goal` - A function that returns whether or not a given node is the goal
-/// * `heuristic` - A function that returns the heuristic value of a given node
-/// ## Returns
-/// An optional vector of nodes from the start to the goal
-pub fn astar_with_expanded_set<E, I, C, N, G, H>(
-    mut expander: E,
-    start: N,
-    goal: G,
-    mut expanded_nodes: Option<&mut HashSet<N>>,
-    heuristic: H,
-) -> Option<(Vec<N>, C)>
+impl <N, C> AStar<N, C>
 where
-    E: FnMut(&N) -> I,
-    I: IntoIterator<Item = (N, C)>,
-    C: Ord + Default + Clone + Add<Output = C>,
-    N: Hash + Clone + Eq,
-    G: Fn(&N) -> bool,
-    H: Fn(&N) -> C,
+    N: Hash + Clone + Eq + Sync,
+    C: Ord + Default + Clone + Add<Output = C> + Sync,
 {
-    let mut open = BinaryHeap::from([SearchNode {
-        node: start.clone(),
-        cost: heuristic(&start),
-    }]);
-    let mut previous = HashMap::new();
-    previous.insert(start.clone(), (None, C::default()));
-    while let Some(SearchNode { node, .. }) = open.pop() {
-        if let Some(expanded_nodes) = expanded_nodes.as_mut() {
-            expanded_nodes.insert(node.clone());
-        }
-        if goal(&node) {
-            return Some(reconstruct_path_with_cost(previous, node));
-        }
-        for (child, cost) in expander(&node) {
-            let new_cost = previous[&node].1.clone() + cost;
-            if !previous.contains_key(&child) || new_cost < previous[&child].1 {
-                previous.insert(child.clone(), (Some(node.clone()), new_cost.clone()));
-                open.push(SearchNode {
-                    node: child.clone(),
-                    cost: new_cost.clone() + heuristic(&child),
-                });
+    /// Create a new A-Star search
+    pub fn new(heuristic: Arc<dyn Fn(&N) -> C + Sync + Send>) -> Self {
+        AStar { heuristic }
+    }
+}
+
+impl<N, C> Search<N, C> for AStar<N, C>
+where
+    N: Hash + Clone + Eq + Sync,
+    C: Ord + Default + Clone + Add<Output = C> + Sync,
+{
+    fn _search<E, I, G>(
+        &self,
+        mut expander: E,
+        start: N,
+        goal: G,
+    ) -> (HashMap<N, (Option<N>, C)>, Option<N>)
+    where
+        E: FnMut(&N) -> I,
+        I: IntoIterator<Item = (N, C)>,
+        G: Fn(&N) -> bool,
+    {
+        let mut open = BinaryHeap::from([SearchNode {
+            node: start.clone(),
+            cost: (self.heuristic)(&start),
+        }]);
+        let mut previous = HashMap::new();
+        previous.insert(start.clone(), (None, C::default()));
+        while let Some(SearchNode { node, .. }) = open.pop() {
+            if goal(&node) {
+                return (previous, Some(node));
+            }
+            for (child, cost) in expander(&node) {
+                let new_cost = previous[&node].1.clone() + cost;
+                if !previous.contains_key(&child) || new_cost < previous[&child].1 {
+                    previous.insert(child.clone(), (Some(node.clone()), new_cost.clone()));
+                    open.push(SearchNode {
+                        node: child.clone(),
+                        cost: new_cost.clone() + (self.heuristic)(&child),
+                    });
+                }
             }
         }
+        (previous, None)
     }
-    None
+}
+
+impl<N, C> BestSearch<N, C> for AStar<N, C>
+where
+    N: Hash + Eq + Clone + Sync,
+    C: Ord + Default + Clone + Add<Output = C> + Sync,
+{
+    fn get_best_heuristic(&self) -> &Arc<dyn Fn(&N) -> C + Sync + Send> {
+        &self.heuristic
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{astar, SearchNode};
-    use crate::domains::{bitpackedgrid::BitPackedGrid, DomainCreate};
-    use std::collections::BinaryHeap;
+    use super::AStar;
+    use crate::{domains::{bitpackedgrid::BitPackedGrid, DomainCreate}, search::Search};
+    use std::sync::Arc;
 
     #[test]
     fn test_astar() {
-        let results = astar(|x| vec![(x + 1, 1), (x + 2, 2)], 0, |x| *x == 2, |x| *x);
+        let results = AStar::new(
+            Arc::new(|x| *x),
+        ).search(|x| vec![(x + 1, 1), (x + 2, 2)], 0, |x| *x == 2);
         assert_eq!(results.unwrap().0, vec![0, 2]);
     }
 
     #[test]
     fn test_astar_bitpacked_grid() {
         let grid = BitPackedGrid::new_from_string(".....\n.###.\n.#...\n.#.#.\n...#.".to_string());
-        let path = astar(
+        let path = AStar::new(
+            Arc::new(|_| 0),
+        ).search(
             |(x, y)| {
                 grid.adjacent((x.clone(), y.clone()), false)
                     .map(|(x, y)| ((x, y), 1))
             },
             (0, 4),
             |(x, y)| *x == 4 && *y == 2,
-            |_| 0,
         );
         assert_eq!(
             path.unwrap().0,
@@ -109,14 +120,15 @@ mod tests {
         let grid = BitPackedGrid::new_from_string(
             "........\n...###..\n.....#..\n.....#..\n........\n........".to_string(),
         );
-        let path = astar(
+        let path = AStar::new(
+            Arc::new(|_| 0),
+        ).search(
             |(x, y)| {
                 grid.adjacent((x.clone(), y.clone()), false)
                     .map(|(x, y)| ((x, y), 1))
             },
             (0, 5),
             |(x, y)| *x == 7 && *y == 0,
-            |_| 0,
         );
         assert_eq!(
             path.unwrap().0,
@@ -138,14 +150,4 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_search_node() {
-        let mut open = BinaryHeap::new();
-        open.push(SearchNode { node: 1, cost: 1 });
-        open.push(SearchNode { node: 0, cost: 0 });
-        open.push(SearchNode { node: 2, cost: 2 });
-        assert_eq!(open.pop().unwrap().node, 0);
-        assert_eq!(open.pop().unwrap().node, 1);
-        assert_eq!(open.pop().unwrap().node, 2);
-    }
 }

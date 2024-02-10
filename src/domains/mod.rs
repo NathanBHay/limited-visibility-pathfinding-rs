@@ -7,7 +7,7 @@
 
 #![allow(dead_code)]
 
-use std::fs::read_to_string;
+use std::{fs::read_to_string, ops::Range};
 
 pub mod adjacencylist;
 pub mod bitpackedgrid;
@@ -67,12 +67,12 @@ pub trait DomainCreate: Domain + Sized {
 /// Trait for Printing Domains
 pub trait DomainPrint: Domain {
     /// Prints the cells of the domain where . represents a free cell and @ represents a blocked
-    /// cell. A path can be printed which is represented as *
-    fn print_cells(&self, path: Option<Vec<(usize, usize)>>) -> String {
-        let (width, height) = self.shape();
+    /// cell. This will be printed with the given dimensions.
+    fn print_cells_with_dims(&self, height: Range<usize>, width: Range<usize>, path: Option<Vec<(usize, usize)>>) -> String {
+        let (grid_width, _) = self.shape();
         let mut s = String::new();
-        for y in 0..height {
-            for x in 0..width {
+        for y in height.clone() {
+            for x in width.clone() {
                 if self.get_value((x, y)) {
                     s.push('.');
                 } else {
@@ -83,10 +83,19 @@ pub trait DomainPrint: Domain {
         }
         if let Some(path) = path {
             for (x, y) in path {
-                s.replace_range(y * (width + 1) + x..y * (width + 1) + x + 1, "*");
+                if width.contains(&x) && height.contains(&y) {
+                    s.replace_range(y * (grid_width + 1) + x..y * (grid_width + 1) + x + 1, "*");
+                }
             }
         }
         s
+    }
+
+    /// Prints the cells of the domain where . represents a free cell and @ represents a blocked
+    /// cell. A path can be printed which is represented as *
+    fn print_cells(&self, path: Option<Vec<(usize, usize)>>) -> String {
+        let (width, height) = self.shape();
+        self.print_cells_with_dims(0..height, 0..width, path)
     }
 }
 

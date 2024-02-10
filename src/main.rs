@@ -3,8 +3,10 @@ use domains::samplegrid::SampleGrid;
 use domains::DomainCreate;
 use heuristics::distance::manhattan_distance;
 use maps::Problem;
+use search::astar::AStar;
 use search::pathstore::{AccStore, GreedyStore};
 use search::samplestar::{PathStoreT, SampleStar};
+use std::sync::Arc;
 use std::time::Instant;
 use util::matrix::{manhattan_dist_matrix, Matrix};
 use util::{matrix::gaussian_kernal, visualiser::Visualiser};
@@ -30,8 +32,9 @@ fn run_sample_star(map: Problem, epoch: usize, limit: usize) {
     let path_store: PathStoreT = Box::new(AccStore::new_count_store());
     let no_path_store: PathStoreT = 
         Box::new(GreedyStore::new(Box::new(move |n| manhattan_distance(*n, goal))));
+    let search = AStar::new(Arc::new(move |x| manhattan_distance(*x, goal)));
     let mut samplestar =
-        SampleStar::new(init_grid(file), start, goal, epoch, init_update_kernel(), path_store, no_path_store, init_stats());
+        SampleStar::new(init_grid(file, start, goal), search, start, goal, epoch, init_update_kernel(), path_store, no_path_store, init_stats());
     let visualiser = Visualiser::new(name, &samplestar.grid, Some(start), Some(goal));
     for i in 1..=limit {
         if samplestar.step() {
@@ -50,11 +53,11 @@ fn run_sample_star(map: Problem, epoch: usize, limit: usize) {
 }
 
 /// The initial grid to search on
-fn init_grid(file: &str) -> SampleGrid {
+fn init_grid(file: &str, (start_x, start_y): (usize, usize), (goal_x, goal_y): (usize, usize)) -> SampleGrid {
     let mut grid = SampleGrid::new_from_file(file);
     grid.blur_samplegrid(&gaussian_kernal(5, 1.0));
-    grid.sample_grid[0][0].state = 1.0; // Just to make sure
-    grid.sample_grid[4][4].state = 1.0;
+    grid.sample_grid[start_x][start_y].state = 1.0; // Just to make sure
+    grid.sample_grid[goal_x][goal_y].state = 1.0;
     grid
 }
 

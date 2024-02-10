@@ -12,27 +12,29 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use crate::{
     domains::{bitpackedgrid::BitPackedGrid, samplegrid::SampleGrid, Domain},
-    heuristics::distance::manhattan_distance,
     util::{filter::KalmanNode, matrix::Matrix},
 };
 
-use super::{focalsearch::focal_search, pathstore::PathStore, samplestarstats::SampleStarStats};
+use super::{pathstore::PathStore, samplestarstats::SampleStarStats, BestSearch};
 
 pub type PathStoreT = Box<dyn PathStore<(usize, usize), usize>>;
 
 /// Sample Star Algorithm
 /// ## Arguments
 /// * `grid` - The sampling grid to search on.
-/// * `start` - The starting node.
+/// * `search` - The search algorithm to use.
+/// * `start` - The start node.
 /// * `goal` - The goal node.
 /// * `epoch` - The number of times to sample each node.
 /// * `kernel` - The kernel to sample with.
 /// * `path_store` - The path store to store the paths.
-/// * `path_to_goal` - If there is a path to the goal in the path store.
-/// * `stats` - The statistics store to store the stats.
-/// 
-pub struct SampleStar {
+/// * `no_path_store` - The path store to store the paths that don't reach the goal
+/// * `stats` - The statistics store to store the stats. Currently built into the 
+/// algorithm however it could be moved out. This is due to the fact search results
+/// aren't stored so stats are calculated on the fly.
+pub struct SampleStar<S: BestSearch<(usize, usize), usize> + Sync> {
     pub grid: SampleGrid,
+    search: S,
     pub previous: (usize, usize),
     pub current: (usize, usize),
     pub goal: (usize, usize),
@@ -44,10 +46,11 @@ pub struct SampleStar {
     pub stats: Arc<Mutex<SampleStarStats>>,
 }
 
-impl SampleStar {
+impl<S: BestSearch<(usize, usize), usize> + Sync> SampleStar<S> {
     /// Creates a new SampleStar algorithm
     pub fn new(
         grid: SampleGrid,
+        search: S,
         start: (usize, usize),
         goal: (usize, usize),
         epoch: usize,
@@ -59,6 +62,7 @@ impl SampleStar {
         assert!(grid.bound_check(start) && grid.bound_check(goal));
         Self {
             grid,
+            search,
             previous: start,
             current: start,
             goal,
@@ -86,16 +90,13 @@ impl SampleStar {
         (0..self.epoch).into_par_iter().for_each(|_| {
             let mut gridmap = BitPackedGrid::new(self.grid.width, self.grid.height);
             let mut sampled_before = gridmap.clone();
-            let (path, weight) = focal_search(
+            let (path, weight) = self.search.best_search(
                 |n| {
                     self.grid
                         .sample_adjacenct(&mut gridmap, &mut sampled_before, *n)
                 },
                 self.current,
                 |n| *n == self.goal,
-                |n| manhattan_distance(*n, self.goal),
-                |_| 0,
-                |n| *n,
             );
             let found_path = path.last() == Some(&self.goal);
             let no_valid_paths = *valid_paths.lock().unwrap() == 0;

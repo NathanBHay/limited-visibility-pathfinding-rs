@@ -1,8 +1,8 @@
 use std::{
-    collections::{BTreeMap, BinaryHeap, HashMap, HashSet}, hash::Hash, ops::Add
+    collections::{BTreeMap, BinaryHeap, HashMap, HashSet}, hash::Hash, ops::Add, sync::Arc
 };
 
-use super::{reconstruct_path_with_cost, SearchNode};
+use super::{BestSearch, Search, SearchNode};
 
 /// Open list for Focal Search. Supports insertion, removal, and popping the best node
 struct FSOpenList<N: Clone + Eq + Hash, C: Clone + Ord>(BTreeMap<C, HashSet<N>>);
@@ -42,9 +42,6 @@ impl<N: Clone + Eq + Hash, C: Clone + Ord> FSOpenList<N, C> {
 /// the use of a second heuristic to further guide the search. This heuristic
 /// doesn't need to be admissible.
 /// ## Arguments
-/// * `expander` - A function that returns an iterator over the nodes adjacent to a given node
-/// * `start` - The start node
-/// * `goal` - A function that returns whether or not a given node is the goal
 /// * `heuristic` - A function that returns the heuristic value of a given node
 /// * `focal_heuristic` - A function tha evaluates nodes within a range of
 /// (0, epsilon] of the best node on the open list
@@ -52,93 +49,123 @@ impl<N: Clone + Eq + Hash, C: Clone + Ord> FSOpenList<N, C> {
 /// to find whether a node is within the focal range. Focal calc should produce
 /// a value where focal_calc(f_min) >= f_min
 /// Vaguely based upon: https://www.ijcai.org/proceedings/2018/0199.pdf
-pub fn focal_search<E, I, C, N, G, H1, H2, F>(
-    mut expander: E,
-    start: N,
-    goal: G,
-    heuristic: H1,
-    focal_heuristic: H2,
-    focal_calc: F,
-) -> (Vec<N>, C)
+pub struct FocalSearch<N, C>
 where
-    E: FnMut(&N) -> I,
-    I: IntoIterator<Item = (N, C)>,
-    C: Ord + Default + Clone + Add<Output = C>,
-    N: Hash + Clone + Eq,
-    G: Fn(&N) -> bool,
-    H1: Fn(&N) -> C,
-    H2: Fn(&N) -> C,
-    F: Fn(&C) -> C,
+    N: Hash + Clone + Eq + Sync,
+    C: Ord + Default + Clone + Add<Output = C> + Sync,
 {
-    let mut open = FSOpenList(BTreeMap::new());
-    open.insert(start.clone(), heuristic(&start));
-    // Focal can be implemented as a heap sorted with the focal heuristic or as
-    // a tuple with both heuristics. The latter is more efficienct given an
-    // expensive heuristic function or in cases where the tie breaking of the
-    // focal heuristic is important. The former is more efficient in cases where
-    // the amount of nodes in the focal list is large.
-    let mut focal = BinaryHeap::from([SearchNode {
-        node: start.clone(),
-        cost: (focal_heuristic(&start), heuristic(&start)),
-    }]);
-    let mut previous = HashMap::new();
-    previous.insert(start.clone(), (None, C::default()));
+    heuristic: Arc<dyn Fn(&N) -> C + Sync + Send>,
+    focal_heuristic: Arc<dyn Fn(&N) -> C + Sync + Send>,
+    focal_calc: Arc<dyn Fn(&C) -> C + Sync + Send>,
+}
 
-    // The current closest node to the goal, used for case where no path is found
-    let mut best_node = (start.clone(), heuristic(&start));
-    while let Some(SearchNode {
-        node,
-        cost: (fcost, hcost),
-    }) = focal.pop()
+impl<N, C> FocalSearch<N, C>
+where
+    N: Hash + Clone + Eq + Sync,
+    C: Ord + Default + Clone + Add<Output = C> + Sync,
+{
+    /// Create a new Focal Search
+    pub fn new(
+        heuristic: Arc<dyn Fn(&N) -> C + Sync + Send>,
+        focal_heuristic: Arc<dyn Fn(&N) -> C + Sync + Send>,
+        focal_calc: Arc<dyn Fn(&C) -> C + Sync + Send>,
+    ) -> Self {
+        FocalSearch {
+            heuristic,
+            focal_heuristic,
+            focal_calc,
+        }
+    }
+}
+
+impl<N, C> Search<N, C> for FocalSearch<N, C>
+where
+    N: Hash + Clone + Eq + Sync,
+    C: Ord + Default + Clone + Add<Output = C> + Sync,
+{
+    fn _search<E, I, G>(&self, mut expander: E, start: N, goal: G) -> (HashMap<N, (Option<N>, C)>, Option<N>)
+    where
+        E: FnMut(&N) -> I,
+        I: IntoIterator<Item = (N, C)>,
+        G: Fn(&N) -> bool 
     {
-        if goal(&node) {
-            return reconstruct_path_with_cost(previous, node.clone());
-        }
-        let f_min = open.peak().unwrap_or(&fcost).clone();
-        if !open.remove(&node, &(hcost)) {
-            continue;
-        } // Just to make sure :)
-        for (child, cost) in expander(&node) {
-            let new_cost = previous[&node].1.clone() + cost;
-            if !previous.contains_key(&child) || new_cost < previous[&child].1 {
-                previous.insert(child.clone(), (Some(node.clone()), new_cost.clone()));
-                let h = heuristic(&child);
-                let child_h = h.clone()+ new_cost.clone();
-                open.insert(child.clone(), child_h.clone());
-                if h <= best_node.1 {
-                    best_node = (child.clone(), h);
-                }
-                // Add to focal list given within the focal range
-                if new_cost <= focal_calc(&f_min) {
-                    focal.push(SearchNode {
-                        node: child.clone(),
-                        cost: (new_cost.clone() + focal_heuristic(&child), child_h), // TODO: No use of previous
-                    });
-                }
+        let mut open = FSOpenList(BTreeMap::new());
+        open.insert(start.clone(), (self.heuristic)(&start));
+        // Focal can be implemented as a heap sorted with the focal heuristic or as
+        // a tuple with both heuristics. The latter is more efficienct given an
+        // expensive heuristic function or in cases where the tie breaking of the
+        // focal heuristic is important. The former is more efficient in cases where
+        // the amount of nodes in the focal list is large.
+        let mut focal = BinaryHeap::from([SearchNode {
+            node: start.clone(),
+            cost: ((self.focal_heuristic)(&start), (self.heuristic)(&start)),
+        }]);
+        let mut previous = HashMap::new();
+        previous.insert(start.clone(), (None, C::default()));
+
+        while let Some(SearchNode {
+            node,
+            cost: (fcost, hcost),
+        }) = focal.pop()
+        {
+            if goal(&node) {
+                return (previous, Some(node));
             }
-        }
-        // Update Lower Bound
-        if let Some(hcost) = open.peak() {
-            if f_min < *hcost {
-                for (node, cost) in open.iter() {
-                    if *cost > focal_calc(&f_min) && *cost <= focal_calc(hcost) {
+            let f_min = open.peak().unwrap_or(&fcost).clone();
+            if !open.remove(&node, &(hcost)) {
+                continue;
+            }
+            for (child, cost) in expander(&node) {
+                let new_cost = previous[&node].1.clone() + cost;
+                if !previous.contains_key(&child) || new_cost < previous[&child].1 {
+                    previous.insert(child.clone(), (Some(node.clone()), new_cost.clone()));
+                    let h = (self.heuristic)(&child);
+                    let child_h = h.clone()+ new_cost.clone();
+                    open.insert(child.clone(), child_h.clone());
+                    // Add to focal list given within the focal range
+                    if new_cost <= (self.focal_calc)(&f_min) {
                         focal.push(SearchNode {
-                            node: node.clone(),
-                            cost: (
-                                previous[node].1.clone() + focal_heuristic(&node),
-                                cost.clone(),
-                            ),
+                            node: child.clone(),
+                            cost: (new_cost.clone() + (self.focal_heuristic)(&child), child_h), // TODO: No use of previous
                         });
                     }
                 }
             }
+            // Update Lower Bound
+            if let Some(hcost) = open.peak() {
+                if f_min < *hcost {
+                    for (node, cost) in open.iter() {
+                        if *cost > (self.focal_calc)(&f_min) && *cost <= (self.focal_calc)(hcost) {
+                            focal.push(SearchNode {
+                                node: node.clone(),
+                                cost: (
+                                    previous[node].1.clone() + (self.focal_heuristic)(&node),
+                                    cost.clone(),
+                                ),
+                            });
+                        }
+                    }
+                }
+            }
         }
+        (previous, None)
     }
-    reconstruct_path_with_cost(previous, best_node.0)
+}
+
+impl<N, C> BestSearch<N, C> for FocalSearch<N, C>
+where
+    N: Hash + Clone + Eq + Sync,
+    C: Ord + Default + Clone + Add<Output = C> + Sync,
+{
+    fn get_best_heuristic(&self) -> &Arc<dyn Fn(&N) -> C + Sync + Send> {
+        &self.heuristic
+    }
 }
 
 #[cfg(test)]
 mod test {
+    use std::sync::Arc;
+
     use crate::{domains::DomainCreate, heuristics::distance::manhattan_distance};
 
     use super::*;
@@ -160,15 +187,16 @@ mod test {
 
     #[test]
     fn test_focal_search() {
-        let results = focal_search(
+        let results = FocalSearch::new(
+            Arc::new(|x| *x),
+            Arc::new(|x| *x),
+            Arc::new(|x| *x),
+        ).search(
             |x| vec![(x + 1, 1), (x + 2, 2)],
             0,
             |x| *x == 2,
-            |x| *x,
-            |x| *x,
-            |x| *x,
         );
-        assert_eq!(results.0, vec![0, 2]);
+        assert_eq!(results.unwrap().0, vec![0, 2]);
     }
 
     #[test]
@@ -177,19 +205,20 @@ mod test {
         let grid = crate::domains::bitpackedgrid::BitPackedGrid::new_from_string(
             ".....\n.###.\n.#...\n.#.#.\n...#.".to_string(),
         );
-        let path = focal_search(
+        let path = FocalSearch::<(usize, usize), usize>::new(
+            Arc::new(|n| manhattan_distance(*n, (4, 4))), // Fix: Dereference the reference to the tuple
+            Arc::new(|_| 0),
+            Arc::new(|x| *x),
+        ).search(
             |(x, y)| {
                 grid.adjacent((x.clone(), y.clone()), false)
                     .map(|(x, y)| ((x, y), 1))
             },
             (0, 4),
             |n| n == &(4, 4),
-            |n| manhattan_distance(*n, (4, 4)), // Fix: Dereference the reference to the tuple
-            |_| 0,
-            |x| *x, 
         );
         assert_eq!(
-            path.0,
+            path.unwrap().0,
             vec![
                 (0, 4),
                 (1, 4),

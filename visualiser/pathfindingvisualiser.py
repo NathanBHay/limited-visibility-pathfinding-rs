@@ -143,14 +143,13 @@ def main():
     parser.add_argument('-i', '--limit', type=int, default=10000, help='The maximum number of steps to visualise')
     args = parser.parse_args()
     start_time = time.time()
-    if args.visualise_specific:
-        v = Visualiser(args.file_name)
-        v.visualise_ground_truth()
-        v.visualise_samplestar(args.visualise_specific, args.labels)
-        plt.show()
-    else:
-        for file_name in args.file_name:
-            v = Visualiser(file_name)
+    for file_name in args.file_name:
+        v = Visualiser(file_name)
+        if args.visualise_specific:
+            v.visualise_ground_truth()
+            v.visualise_samplestar(args.visualise_specific, args.labels)
+            plt.show()
+        else:
             v.visualise_all(args.labels, args.limit)
     print(f'Time taken: {time.time() - start_time}s')
 

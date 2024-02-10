@@ -125,14 +125,13 @@ where
 
     fn add_path(&mut self, path: Vec<N>, _weight: W) {
         self.store = path;
-        if let Some(node) = self.store.first() {
-            println!("Node: {:?}", node);
+        if let Some(node) = self.store.last() {
             self.weight = Some((self.heuristic)(node));
         }
     }
 
     fn next_node(&self, nodes: Vec<N>) -> Option<N> {
-        nodes.into_iter().find(|n| self.store.first() == Some(n))
+        nodes.into_iter().find(|n| self.store.get(1) == Some(n))
     }
 
     fn get(&self, _node: &N) -> Option<&W> {
