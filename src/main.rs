@@ -20,10 +20,10 @@ mod util;
 
 fn main() {
     let now = Instant::now();
-    for map in maps::MAP_PACK.into_iter() {
-        run_sample_star(map, 10, 500);
-    }
-    run_sample_star(maps::FILL, 50, 50);
+    // for map in maps::MAP_PACK.into_iter() {
+    //     run_sample_star(map, 10, 500);
+    // }
+    run_sample_star(maps::MAP, 100, 100);
     println!("Time Taken: {}s", now.elapsed().as_secs_f32());
 }
 

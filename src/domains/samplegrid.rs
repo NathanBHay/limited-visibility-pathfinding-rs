@@ -1,3 +1,6 @@
+use rand::rngs::ThreadRng;
+use rand::Rng;
+
 use super::bitpackedgrid::BitPackedGrid;
 use super::{Domain, DomainCreate, DomainPrint};
 use crate::fov::fieldofvision::raycast_matrix;
@@ -138,8 +141,13 @@ impl SampleGrid {
 
     /// Samples a cell with a given chance
     pub fn sample<'a>(&self, gridmap: &'a mut BitPackedGrid, (x, y): (usize, usize)) -> bool {
+        self.sample_cached(gridmap, &mut rand::thread_rng(), (x, y))
+    }
+
+    /// Samples a cell with a given chance caching the random number generator
+    pub fn sample_cached<'a>(&self, gridmap: &'a mut BitPackedGrid, rng: &mut ThreadRng, (x, y): (usize, usize)) -> bool {
         let value = self.sample_grid[x][y].state != 0.0
-            && rand::random::<f32>() < self.sample_grid[x][y].state;
+            && rng.gen::<f32>() < self.sample_grid[x][y].state;
         gridmap.set_value((x, y), value);
         value
     }
@@ -152,9 +160,10 @@ impl SampleGrid {
         width: usize,
         height: usize,
     ) {
+        let mut rng = rand::thread_rng();
         for x in x..x + width {
             for y in y..y + height {
-                self.sample(gridmap, (x, y));
+                self.sample_cached(gridmap, &mut rng, (x, y));
             }
         }
     }
@@ -255,7 +264,7 @@ impl SampleGrid {
         (x, y): (usize, usize),
         diagonal: bool,
     ) -> Vec<(usize, usize)> {
-        super::neighbors(x, y, diagonal).filter(|(x, y)| self.bound_check((*x, *y))).collect()
+        super::neighbors((x, y), diagonal).filter(|(x, y)| self.bound_check((*x, *y))).collect()
     }
 
     /// Samples all adjacent cells on sampling grid
@@ -263,13 +272,14 @@ impl SampleGrid {
         &self,
         gridmap: &'a mut BitPackedGrid,
         sampled_before: &'a mut BitPackedGrid,
+        rng: &mut ThreadRng,
         (x, y): (usize, usize),
     ) -> Vec<((usize, usize), usize)> {
-        super::neighbors(x, y, false)
+        super::neighbors_cached((x, y), false, Some(rng))
             .filter(move |(x, y)| {
                 if self.bound_check((*x, *y)) && !sampled_before.get_value((*x, *y)) {
                     sampled_before.set_value((*x, *y), true);
-                    self.sample(gridmap, (*x, *y))
+                    self.sample_cached(gridmap, rng, (*x, *y))
                 } else {
                     gridmap.get_value((*x, *y))
                 }

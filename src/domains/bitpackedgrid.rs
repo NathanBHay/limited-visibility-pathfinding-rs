@@ -117,7 +117,7 @@ impl BitPackedGrid {
         (x, y): (usize, usize),
         diagonal: bool,
     ) -> impl Iterator<Item = (usize, usize)> + '_ {
-        neighbors(x, y, diagonal).filter(move |(x, y)| self.get_value((*x, *y)))
+        neighbors((x, y), diagonal).filter(move |(x, y)| self.get_value((*x, *y)))
     }
 
     pub fn adjacent1(

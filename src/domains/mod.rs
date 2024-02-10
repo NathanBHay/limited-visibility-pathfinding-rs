@@ -9,6 +9,8 @@
 
 use std::{fs::read_to_string, ops::Range};
 
+use rand::{rngs::ThreadRng, seq::SliceRandom};
+
 pub mod adjacencylist;
 pub mod bitpackedgrid;
 pub mod edgelist;
@@ -100,26 +102,30 @@ pub trait DomainPrint: Domain {
 }
 
 /// Helper function to get a iterator of the neighbors of a cell
-pub fn neighbors(x: usize, y: usize, diagonal: bool) -> impl Iterator<Item = (usize, usize)> {
-    let direct = vec![
+pub fn neighbors((x, y): (usize, usize), diagonal: bool) -> impl Iterator<Item = (usize, usize)> {
+    neighbors_cached((x, y), diagonal, None)
+}
+
+/// Helper function to get a iterator of the neighbors of a cell caching the random number gen
+pub fn neighbors_cached((x, y): (usize, usize), diagonal: bool, rng: Option<&mut ThreadRng>) -> impl Iterator<Item = (usize, usize)> {
+    let mut neighbors = vec![
         (x.wrapping_add(1), y), // Theses are wrapping as to avoid branching
         (x, y.wrapping_add(1)), // on BitPacked Grids
         (x.wrapping_sub(1), y),
         (x, y.wrapping_sub(1)),
-    ]
-    .into_iter();
+    ];
 
-    let diagonal = if diagonal {
-        vec![
+    if diagonal {
+        neighbors.extend(vec![
             (x.wrapping_add(1), y.wrapping_add(1)),
             (x.wrapping_sub(1), y.wrapping_add(1)),
             (x.wrapping_add(1), y.wrapping_sub(1)),
             (x.wrapping_sub(1), y.wrapping_sub(1)),
-        ]
-        .into_iter()
-    } else {
-        Vec::new().into_iter()
-    };
+        ]);
+    }
 
-    direct.chain(diagonal)
+    if let Some(rng) = rng {
+        neighbors.shuffle(rng);
+    }
+    neighbors.into_iter()
 }

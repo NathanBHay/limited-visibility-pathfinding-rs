@@ -80,7 +80,7 @@ impl HashedGrid {
         y: usize,
         diagonal: bool,
     ) -> impl Iterator<Item = (usize, usize)> + '_ {
-        neighbors(x, y, diagonal).filter(move |(x, y)| self.valid_map_value((*x, *y)))
+        neighbors((x, y), diagonal).filter(move |(x, y)| self.valid_map_value((*x, *y)))
     }
 }
 

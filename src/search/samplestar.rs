@@ -90,10 +90,11 @@ impl<S: BestSearch<(usize, usize), usize> + Sync> SampleStar<S> {
         (0..self.epoch).into_par_iter().for_each(|_| {
             let mut gridmap = BitPackedGrid::new(self.grid.width, self.grid.height);
             let mut sampled_before = gridmap.clone();
+            let mut rng = rand::thread_rng(); // Incrementally improves performance
             let (path, weight) = self.search.best_search(
                 |n| {
                     self.grid
-                        .sample_adjacenct(&mut gridmap, &mut sampled_before, *n)
+                        .sample_adjacenct(&mut gridmap, &mut sampled_before, &mut rng, *n)
                 },
                 self.current,
                 |n| *n == self.goal,
