@@ -2,8 +2,7 @@ use rand::rngs::ThreadRng;
 use rand::Rng;
 
 use super::bitpackedgrid::BitPackedGrid;
-use super::{Domain, DomainCreate, DomainPrint};
-use crate::fov::fieldofvision::raycast_matrix;
+use super::{Domain, DomainCreate, DomainPrint, DomainVisibility, RadiusCalc};
 use crate::matrix;
 use crate::util::filter::KalmanNode;
 use crate::util::matrix::{convolve2d, matrix_overlay, ConvResolve, Matrix};
@@ -43,7 +42,7 @@ impl Domain for SampleGrid {
     }
 
     fn get_value(&self, (x, y): (usize, usize)) -> bool {
-        self.sample_grid[x][y].state != 0.0
+        self.bounds_check((x, y)) && self.sample_grid[x][y].state > Self::NEAREST_THRESHOLD
     }
 
     fn shape(&self) -> (usize, usize) {
@@ -55,12 +54,16 @@ impl DomainCreate for SampleGrid {}
 
 impl DomainPrint for SampleGrid {}
 
+impl RadiusCalc for SampleGrid {}
+
+impl DomainVisibility for SampleGrid {}
+
 impl SampleGrid {
     const NEAREST_THRESHOLD: f32 = 0.5;
 
     /// Creates a new sampling grid from a sampling grid and a ground truth grid
     pub fn new_from_grid(grid: Matrix<f32>, ground_truth: BitPackedGrid) -> Self {
-        let (width, height) = (grid.width, grid.height);
+        let (width, height) = grid.shape();
         let mut sample_grid = matrix![KalmanNode::default(); height, width];
         for y in 0..width {
             // Swapped width and height here to match the matrix indexing
@@ -124,21 +127,6 @@ impl SampleGrid {
         self.sample_grid = convolve2d(&self.sample_grid, kernel, ConvResolve::Nearest);
     }
 
-    /// Get value above the threshold for the sampling grid
-    pub fn get_threshold_value(&self, (x, y): (usize, usize)) -> bool {
-        self.bound_check((x, y)) && self.sample_grid[x][y].state > Self::NEAREST_THRESHOLD
-    }
-
-    /// Get Visibility of the sample grid
-    pub fn visibility(&self, (x, y): (usize, usize), radius: usize) -> Matrix<bool> {
-        raycast_matrix(
-            (x as isize, y as isize),
-            radius,
-            |(x, y)| self.get_threshold_value((x as usize, y as usize)),
-            |(x, y)| self.bound_check((x as usize, y as usize)),
-        )
-    }
-
     /// Samples a cell with a given chance
     pub fn sample<'a>(&self, gridmap: &'a mut BitPackedGrid, (x, y): (usize, usize)) -> bool {
         self.sample_cached(gridmap, &mut rand::thread_rng(), (x, y))
@@ -168,20 +156,6 @@ impl SampleGrid {
         }
     }
 
-    // Calculates the radius of the sampling area
-    pub fn radius_calc(
-        &self,
-        (x, y): (usize, usize),
-        radius: usize,
-    ) -> ((usize, usize), usize, usize) {
-        let radius = radius + 1;
-        let x_min = x.saturating_sub(radius);
-        let y_min = y.saturating_sub(radius);
-        let x_max = (x + radius).min(self.width);
-        let y_max = (y + radius).min(self.height);
-        ((x_min, y_min), x_max - x_min, y_max - y_min)
-    }
-
     /// Samples a cell with a given chance
     pub fn sample_radius<'a>(
         &self,
@@ -196,6 +170,23 @@ impl SampleGrid {
     /// Samples all cells in the grid
     pub fn sample_all<'a>(&self, gridmap: &'a mut BitPackedGrid) {
         self.sample_area(gridmap, (0, 0), self.width, self.height)
+    }
+
+    /// Sample the same cells that are found on thbe sampled before grid. Used in case where one
+    /// wants to use the memory of previously sampled grids to sample new grids.
+    pub fn sample_based_on_grid<'a>(
+        &self,
+        gridmap: &'a mut BitPackedGrid,
+        sampled_before: &BitPackedGrid,
+    ) {
+        let mut rng = rand::thread_rng();
+        for x in 0..self.width {
+            for y in 0..self.height {
+                if sampled_before.get_value((x, y)) {
+                    self.sample_cached(gridmap, &mut rng, (x, y));
+                }
+            }
+        }
     }
 
     /// Samples a cell with a given chance
@@ -233,8 +224,7 @@ impl SampleGrid {
 
     /// Updates nodes based upon a kernal
     fn update_kernel(&mut self, (x, y): (usize, usize), kernel: Matrix<Option<f32>>) {
-        let kernel_size = (kernel.width, kernel.height);
-        for (n, (i, j)) in matrix_overlay((self.width, self.height), kernel_size, (x, y)) {
+        for (n, (i, j)) in matrix_overlay(self.shape(), kernel.shape(), (x, y)) {
             if kernel[j][i].is_some() {
                 self.update_node(n, kernel[j][i].unwrap());
             }
@@ -253,18 +243,13 @@ impl SampleGrid {
         self.update_kernel((x, y), kernel);
     }
 
-    /// Checks if within bounds
-    pub fn bound_check(&self, (x, y): (usize, usize)) -> bool {
-        x < self.width && y < self.height
-    }
-
     /// Get all adjacenct cells on sampling grid
     pub fn adjacent(
         &self,
         (x, y): (usize, usize),
         diagonal: bool,
     ) -> Vec<(usize, usize)> {
-        super::neighbors((x, y), diagonal).filter(|(x, y)| self.bound_check((*x, *y))).collect()
+        super::neighbors((x, y), diagonal).filter(|(x, y)| self.bounds_check((*x, *y))).collect()
     }
 
     /// Samples all adjacent cells on sampling grid
@@ -277,7 +262,7 @@ impl SampleGrid {
     ) -> Vec<((usize, usize), usize)> {
         super::neighbors_cached((x, y), false, Some(rng))
             .filter(move |(x, y)| {
-                if self.bound_check((*x, *y)) && !sampled_before.get_value((*x, *y)) {
+                if self.bounds_check((*x, *y)) && !sampled_before.get_value((*x, *y)) {
                     sampled_before.set_value((*x, *y), true);
                     self.sample_cached(gridmap, rng, (*x, *y))
                 } else {
@@ -292,7 +277,7 @@ impl SampleGrid {
 #[cfg(test)]
 mod tests {
     use crate::{
-        domains::{bitpackedgrid::BitPackedGrid, Domain, DomainCreate, DomainPrint},
+        domains::{bitpackedgrid::BitPackedGrid, Domain, DomainCreate, DomainPrint, DomainVisibility},
         matrix,
         util::matrix::{gaussian_kernal, Matrix},
     };

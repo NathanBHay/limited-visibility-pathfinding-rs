@@ -12,7 +12,9 @@
 
 use std::vec;
 
-use super::{neighbors, Domain, DomainCreate, DomainPrint};
+use crate::util::matrix::matrix_overlay;
+
+use super::{neighbors, samplegrid::SampleGrid, Domain, DomainCreate, DomainPrint, DomainVisibility, RadiusCalc};
 
 /// A grid of bits packed into usize-bit words
 #[derive(Clone, Debug)]
@@ -75,16 +77,15 @@ impl DomainCreate for BitPackedGrid {}
 
 impl DomainPrint for BitPackedGrid {}
 
+impl RadiusCalc for BitPackedGrid {}
+
+impl DomainVisibility for BitPackedGrid {}
+
 impl BitPackedGrid {
     const PADDING: usize = 2;
     const BITS_PER_WORD: usize = usize::BITS as usize;
     const LOG2_BITS_PER_WORD: usize = usize::BITS.trailing_zeros() as usize;
     const INDEX_MASK: usize = BitPackedGrid::BITS_PER_WORD - 1;
-
-    /// Check if a given x, y coordinate is within the bounds of the map
-    pub fn bounds_check(&self, (x, y): (usize, usize)) -> bool {
-        x < self.width && y < self.height
-    }
 
     /// Convert x, y to map id
     /// ## Arguments
@@ -109,6 +110,25 @@ impl BitPackedGrid {
             .iter()
             .map(|word| word.count_ones() as usize)
             .sum()
+    }
+
+    /// Invert the grid, definetly not the fastest way to do this
+    pub fn invert(&mut self) {
+        for x in 0..self.width {
+            for y in 0..self.height {
+                self.set_value((x, y), !self.get_value((x, y)))
+            }
+        }
+    }
+
+    /// Set Radius based upon a raycast
+pub fn raycast_set_radius(&mut self, gridmap: &SampleGrid, (x, y): (usize, usize), radius: usize, value: bool) {
+        let kernel = gridmap.visibility((x, y), radius);
+        for (n, (i, j)) in matrix_overlay(self.shape(), kernel.shape(), (x, y)) {
+            if kernel[j][i] {
+                self.set_value(n, value);
+            }
+        }
     }
 
     /// Get the neighbors of a given cell

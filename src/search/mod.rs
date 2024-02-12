@@ -7,6 +7,7 @@ pub mod dstarlite;
 pub mod focalsearch;
 pub mod pathstore;
 pub mod samplestar;
+pub mod samplestarbaseline;
 pub mod uninformed;
 pub mod samplestarstats;
 

@@ -14,6 +14,13 @@ pub struct Matrix<T> {
     pub height: usize,
 }
 
+impl<T> Matrix<T> {
+    /// Get shape of the matrix.
+    pub fn shape(&self) -> (usize, usize) {
+        (self.width, self.height)
+    }
+}
+
 #[macro_export]
 #[allow(unused_assignments)]
 macro_rules! matrix {

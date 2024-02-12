@@ -44,12 +44,12 @@ class Visualiser:
             if self.goal:
                 self.ax.scatter(self.goal[0] + 0.5, self.dims[0] - self.goal[1] - 0.5, color=viridis1, s=node_size, marker='s')
 
-    def visualise_ground_truth(self):
+    def visualise_bitpacked_grid(self, name: str = 'ground_truth'):
         """
         Visualise the file_ground_truth.json file. The ground truth is represented as a 2d bool array.
         """
         self.ax.set_title(f'{self.file_name.capitalize()} Ground Truth', fontsize=16)
-        with open(f'{self.file_name}_ground_truth.json') as f:
+        with open(f'{self.file_name}_{name}.json') as f:
             ground_truth = json_load(f)
             ground_truth = np.array(ground_truth['grid']).astype(bool).transpose()
             self.ax.imshow(ground_truth, cmap='gray', extent=[0, self.dims[1], 0, self.dims[0]])
@@ -114,23 +114,26 @@ class Visualiser:
                 self.ax.plot([edge[0][0][0] + 0.5, edge[0][1][0] + 0.5], [self.dims[0] - edge[0][0][1] - 0.5, self.dims[0] - edge[0][1][1] - 0.5], c=viridis(edge[1]), linewidth=4)
             self.ax.text(1, 1, f'Path Len: {final_path["length"]}', transform=self.ax.transAxes, fontsize=14, verticalalignment='top', horizontalalignment='right', bbox=props)
 
-    def visualise_all(self, labels: bool = True, limit: int = 1000):
+    def visualise_all(self, labels: bool = True, limit: int = 1000, different_grid: str = None):
         """
         Visualise all files
         """
-        self.visualise_ground_truth()
+        self.visualise_bitpacked_grid()
         self.visualise_start_end()
         plt.savefig(f'{self.file_name}_ground_truth.png')
         self.ax.cla()
         for i in range(1, limit+1):
-            self.visualise_ground_truth()
+            if different_grid:
+                self.visualise_bitpacked_grid(f'{different_grid}_{i}')
+            else: 
+                self.visualise_bitpacked_grid()
             try:
                 self.visualise_samplestar(i, labels)
             except FileNotFoundError: break
             plt.savefig(f'{self.file_name}_step_{i}.png')
             self.ax.cla()
         self.ax.cla()
-        self.visualise_ground_truth()
+        self.visualise_bitpacked_grid()
         self.visualise_final_path()
         plt.savefig(f'{self.file_name}_final_path.png')
         self.ax.cla()
@@ -141,16 +144,17 @@ def main():
     parser.add_argument('-vs', '--visualise-specific', type=int, help='The specific step to visualise')
     parser.add_argument('-l', '--labels', action='store_true', default=False, help='Whether to show labels on the sample grid')
     parser.add_argument('-i', '--limit', type=int, default=10000, help='The maximum number of steps to visualise')
+    parser.add_argument('-d', '--different-grid', type=str, help='Specify the name of a different grid ground truth' )
     args = parser.parse_args()
     start_time = time.time()
     for file_name in args.file_name:
         v = Visualiser(file_name)
         if args.visualise_specific:
-            v.visualise_ground_truth()
+            v.visualise_bitpacked_grid()
             v.visualise_samplestar(args.visualise_specific, args.labels)
             plt.show()
         else:
-            v.visualise_all(args.labels, args.limit)
+            v.visualise_all(args.labels, args.limit, args.different_grid)
     print(f'Time taken: {time.time() - start_time}s')
 
 if __name__ == '__main__':

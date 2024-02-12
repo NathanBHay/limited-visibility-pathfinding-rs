@@ -41,23 +41,27 @@ impl Visualiser {
         visualiser
     }
 
-    /// Visualise the ground truth of the grid
-    fn visualise_ground_truth(&self, grid: &BitPackedGrid) {
-        let mut ground_truth = vec![vec![false; grid.height]; grid.width];
+    pub fn visualise_bitpacked_grid(&self, grid: &BitPackedGrid, name: &str) {
+        let mut bitpacked_grid = vec![vec![false; grid.height]; grid.width];
         for x in 0..grid.width {
             for y in 0..grid.height {
-                ground_truth[x][y] = grid.get_value((x, y));
+                bitpacked_grid[x][y] = grid.get_value((x, y));
             }
         }
-        let ground_truth = json!({
-            "grid": ground_truth,
+        let bitpacked_grid = json!({
+            "grid": bitpacked_grid,
             "start": self.start,
             "goal": self.goal,
         });
-        let mut file = File::create(format!("{}_ground_truth.json", self.file_path)).unwrap();
-        serde_json::to_writer(&mut file, &ground_truth).unwrap();
+        let mut file = File::create(format!("{}_{}.json", self.file_path, name)).unwrap();
+        serde_json::to_writer(&mut file, &bitpacked_grid).unwrap();
     }
 
+    /// Visualise the ground truth of the grid
+    fn visualise_ground_truth(&self, grid: &BitPackedGrid) {
+        self.visualise_bitpacked_grid(grid, "ground_truth")
+    }
+    
     /// Visualise the current state of the grid and found paths
     pub fn visualise_iteration(
         &self,

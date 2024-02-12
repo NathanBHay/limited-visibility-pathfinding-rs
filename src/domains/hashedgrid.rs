@@ -63,14 +63,9 @@ impl HashedGrid {
         }
     }
 
-    /// Checks if a given coordinate is valid
-    pub fn is_valid(&self, (x, y): (usize, usize)) -> bool {
-        x < self.width && y < self.height
-    }
-
     /// Checks if a given coordinate is valid and not an obstacle
     pub fn valid_map_value(&self, (x, y): (usize, usize)) -> bool {
-        self.is_valid((x, y)) && self.get_value((x, y))
+        self.bounds_check((x, y)) && self.get_value((x, y))
     }
 
     /// Gets the neighbors of a given coordinate
