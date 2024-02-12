@@ -11,13 +11,12 @@ use rayon::prelude::*;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use crate::{
-    domains::{bitpackedgrid::BitPackedGrid, samplegrid::SampleGrid, Domain},
-    util::{filter::KalmanNode, matrix::Matrix},
+    domains::{bitpackedgrid::BitPackedGrid, samplegrid::SampleGrid, Domain, DomainPrint},
+    util::matrix::Matrix,
 };
 
-use super::{pathstore::PathStore, samplestarstats::SampleStarStats, BestSearch};
+use super::{pathstore::PathStore, samplestar::PathStoreT, samplestarstats::SampleStarStats, BestSearch};
 
-pub type PathStoreT = Box<dyn PathStore<(usize, usize), usize>>;
 
 /// Sample Star Algorithm
 /// ## Arguments
@@ -32,7 +31,7 @@ pub type PathStoreT = Box<dyn PathStore<(usize, usize), usize>>;
 /// * `stats` - The statistics store to store the stats. Currently built into the
 /// algorithm however it could be moved out. This is due to the fact search results
 /// aren't stored so stats are calculated on the fly.
-pub struct SampleStar<S: BestSearch<(usize, usize), usize> + Sync> {
+pub struct SampleStarBaseline<S: BestSearch<(usize, usize), usize> + Sync> {
     pub grid: SampleGrid,
     search: S,
     pub previous: (usize, usize),
@@ -44,9 +43,10 @@ pub struct SampleStar<S: BestSearch<(usize, usize), usize> + Sync> {
     path_store: Arc<Mutex<PathStoreT>>,
     no_path_store: Arc<Mutex<PathStoreT>>,
     pub stats: Arc<Mutex<SampleStarStats>>,
+    pub sampled_before: BitPackedGrid,
 }
 
-impl<S: BestSearch<(usize, usize), usize> + Sync> SampleStar<S> {
+impl<S: BestSearch<(usize, usize), usize> + Sync> SampleStarBaseline<S> {
     /// Creates a new SampleStar algorithm
     pub fn new(
         grid: SampleGrid,
@@ -60,6 +60,7 @@ impl<S: BestSearch<(usize, usize), usize> + Sync> SampleStar<S> {
         stats: SampleStarStats,
     ) -> Self {
         assert!(grid.bounds_check(start) && grid.bounds_check(goal));
+        let (width, height) = grid.shape();
         Self {
             grid,
             search,
@@ -72,6 +73,7 @@ impl<S: BestSearch<(usize, usize), usize> + Sync> SampleStar<S> {
             path_store: Arc::new(Mutex::new(path_store)),
             no_path_store: Arc::new(Mutex::new(no_path_store)),
             stats: Arc::new(Mutex::new(stats)),
+            sampled_before: BitPackedGrid::new(width, height),
         }
     }
 
@@ -84,18 +86,18 @@ impl<S: BestSearch<(usize, usize), usize> + Sync> SampleStar<S> {
         self.no_path_store.lock().unwrap().reinitialize();
         self.stats.lock().unwrap().clear();
         self.grid.raycast_update(self.current, &self.kernel);
+        self.sampled_before.raycast_set_radius(&self.grid, self.current, 2, true);
+        let sampled_before = self.sampled_before.clone();
+        println!("{}", sampled_before.print_cells(None));
         // Keeping a seperate count should allow for less contention on the lock
         // as path_store.len() is unneccesary.
         let valid_paths = Arc::new(Mutex::new(0));
         (0..self.epoch).into_par_iter().for_each(|_| {
             let mut gridmap = BitPackedGrid::new(self.grid.width, self.grid.height);
-            let mut sampled_before = gridmap.clone();
-            let mut rng = rand::thread_rng(); // Incrementally improves performance
+            gridmap.invert();
+            self.grid.sample_based_on_grid(&mut gridmap, &sampled_before);
             let (path, weight) = self.search.best_search(
-                |n| {
-                    self.grid
-                        .sample_adjacenct(&mut gridmap, &mut sampled_before, &mut rng, *n)
-                },
+                |n| gridmap.adjacent1(*n).filter(|(n, _)| self.grid.get_value(*n)).collect::<Vec<_>>(),
                 self.current,
                 |n| *n == self.goal,
             );
@@ -153,44 +155,6 @@ impl<S: BestSearch<(usize, usize), usize> + Sync> SampleStar<S> {
             self.path_store.lock().unwrap()
         } else {
             self.no_path_store.lock().unwrap()
-        }
-    }
-
-    /// Calculate the number of samples needed to achieve a confidence interval
-    /// of Z and a margin of error of MARGIN_OF_ERROR. This possibly results
-    /// in less samples than the statistical epoch.
-    fn statistical_epoch(&self, sampling_states: Vec<KalmanNode>) -> usize {
-        let (s, c) = sampling_states
-            .iter()
-            .map(|n| n.state)
-            .filter(|n| n != &0.0 || n != &1.0)
-            .fold((0.0, 0), |(s, c), x| (s + x, c + 1));
-        let p: f32 = s / c as f32;
-        (Self::DESIGN_EFFECT * p * (1.0 - p)) as usize
-    }
-
-    // Constant values for statistical epoch
-    const Z: f32 = 1.96;
-    const MARGIN_OF_ERROR: f32 = 0.05;
-    const D: f32 = Self::Z / Self::MARGIN_OF_ERROR;
-    const DESIGN_EFFECT: f32 = Self::D * Self::D;
-
-    /// Fill the space if there are 3 adjacent cells, stepping backwards. Bad heuristic that is too
-    /// situational to be useful.
-    fn fill_space<E, I>(&mut self) {
-        if self
-            .grid
-            .adjacent(self.current, false)
-            .into_iter()
-            .filter(|n| {
-                !self.grid.get_value(*n) && self.grid.sample_grid[n.0][n.1].covariance == 0.0
-            })
-            .count()
-            == 3
-            && self.previous != self.current
-        {
-            self.grid.set_value(self.previous, true);
-            self.current = self.previous;
         }
     }
 }

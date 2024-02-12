@@ -11,6 +11,8 @@ use std::{fs::read_to_string, ops::Range};
 
 use rand::{rngs::ThreadRng, seq::SliceRandom};
 
+use crate::{fov::fieldofvision::raycast_matrix, util::matrix::Matrix};
+
 pub mod adjacencylist;
 pub mod bitpackedgrid;
 pub mod edgelist;
@@ -33,6 +35,12 @@ pub trait Domain {
 
     /// Get shape of the data listed in width, height format.
     fn shape(&self) -> (usize, usize);
+
+    /// Check if a given coordinate is valid
+    fn bounds_check(&self, n: (usize, usize)) -> bool {
+        let (width, height) = self.shape();
+        n.0 < width && n.1 < height
+    }
 }
 
 /// Trait used to create domains from files and strings.
@@ -98,6 +106,33 @@ pub trait DomainPrint: Domain {
     fn print_cells(&self, path: Option<Vec<(usize, usize)>>) -> String {
         let (width, height) = self.shape();
         self.print_cells_with_dims(0..height, 0..width, path)
+    }
+}
+
+/// Trait for calculating the radius of a given point
+pub trait RadiusCalc: Domain {
+    /// Calculate the radius of a given point
+    fn radius_calc(&self, n: (usize, usize), radius: usize) -> ((usize, usize), usize, usize) {
+        let radius = if radius % 2 == 0 { radius + 1 } else { radius};
+        let x_min = n.0.saturating_sub(radius);
+        let y_min = n.1.saturating_sub(radius);
+        let (width, height) = self.shape();
+        let x_max = (n.0 + radius).min(width);
+        let y_max = (n.1 + radius).min(height);
+        ((x_min, y_min), x_max - x_min, y_max - y_min)
+    }
+}
+
+/// Trait for computing the visibility within a domain
+pub trait DomainVisibility: Domain {
+    /// Get the visibility of a given point
+    fn visibility(&self, n: (usize, usize), radius: usize) -> Matrix<bool> {
+        raycast_matrix(
+            (n.0 as isize, n.1 as isize),
+            radius,
+            |(x, y)| self.get_value((x as usize, y as usize)),
+            |(x, y)| self.bounds_check((x as usize, y as usize)),
+        )
     }
 }
 
