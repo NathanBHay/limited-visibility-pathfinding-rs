@@ -8,16 +8,16 @@ pub mod focalsearch;
 pub mod pathstore;
 pub mod samplestar;
 pub mod samplestarbaseline;
-pub mod uninformed;
 pub mod samplestarstats;
+pub mod uninformed;
 
 /// Trait representation of a search algorithm, allows for polymorphic searches.
 /// A search algorithm is therefore a structure that keeps its specific functions
 /// heuristic function.
-pub trait Search<N, C> 
+pub trait Search<N, C>
 where
     N: Hash + Eq + Clone,
-    C: Ord + Clone
+    C: Ord + Clone,
 {
     /// Search function that finds a path from the start node to the goal node
     /// ## Arguments
@@ -30,7 +30,7 @@ where
     where
         E: FnMut(&N) -> I,
         I: IntoIterator<Item = (N, C)>,
-        G: Fn(&N) -> bool 
+        G: Fn(&N) -> bool,
     {
         match self._search(expander, start, goal) {
             (distances, Some(goal)) => Some(reconstruct_path(&distances, goal)),
@@ -45,8 +45,13 @@ where
     /// * `start` - The starting node
     /// * `goal` - The goal function that returns true if the node is the goal
     /// ## Returns
-/// A HashMap of nodes to their parent nodes and the cost to reach them and the goal node
-    fn _search<E, I, G>(&self, expander: E, start: N, goal: G) -> (HashMap<N, (Option<N>, C)>, Option<N>)
+    /// A HashMap of nodes to their parent nodes and the cost to reach them and the goal node
+    fn _search<E, I, G>(
+        &self,
+        expander: E,
+        start: N,
+        goal: G,
+    ) -> (HashMap<N, (Option<N>, C)>, Option<N>)
     where
         E: FnMut(&N) -> I,
         I: IntoIterator<Item = (N, C)>,
@@ -55,12 +60,12 @@ where
 
 /// Trait that represents a search algorithm that can return the best next node if the goal isn't
 /// found. This algorithm also assumes parallelism.
-pub trait BestSearch<N, C>: Search<N, C> 
+pub trait BestSearch<N, C>: Search<N, C>
 where
     N: Hash + Eq + Clone,
-    C: Ord + Clone
+    C: Ord + Clone,
 {
-    /// Search function that finds a path from the start node to the goal node. In the event the 
+    /// Search function that finds a path from the start node to the goal node. In the event the
     /// goal isn't found, it returns the path of the node reasoned to be the best next node
     /// ## Arguments
     /// * `expander` - The expander function that returns the children of a node
@@ -72,28 +77,30 @@ where
     where
         E: FnMut(&N) -> I,
         I: IntoIterator<Item = (N, C)>,
-        G: Fn(&N) -> bool 
+        G: Fn(&N) -> bool,
     {
         match self._search(expander, start, goal) {
             (distances, Some(goal)) => reconstruct_path(&distances, goal),
             (distances, _) => {
-                let (best_node, _) = distances
+                let (best_node, c) = distances
                     .iter()
-                    .filter_map(|(node, (parent, _))| 
-                        match parent {
-                            Some(_) => Some((node, self.get_best_heuristic()(node))),
-                            None => None
-                        }
-                    )
+                    .filter_map(|(node, (parent, _))| match parent {
+                        Some(_) => Some((node, self.get_best_heuristic()(node))),
+                        None => None,
+                    })
                     .min_by_key(|(_, cost)| cost.clone())
                     .unwrap();
-                reconstruct_path(&distances, best_node.clone())
+                let (path, _) = reconstruct_path(&distances, best_node.clone());
+                (path, c)
             }
-        }    
+        }
     }
 
     /// Returns the heuristic used to find the next best node rather than the goal node
     fn get_best_heuristic(&self) -> &Arc<dyn Fn(&N) -> C + Sync + Send>;
+
+    /// Optionally overwrite the best heuristic
+    fn set_best_heuristic(&mut self, heuristic: Arc<dyn Fn(&N) -> C + Sync + Send>) {}
 }
 
 /// Reconstructs a path from a given node to the start node given a cost
@@ -102,13 +109,10 @@ where
 /// * `node` - The node to reconstruct the path from
 /// ## Returns
 /// A vector of nodes from the start to the given node and the cost of the path
-fn reconstruct_path<N, C>(
-    parent: &HashMap<N, (Option<N>, C)>,
-    mut node: N,
-) -> (Vec<N>, C)
+fn reconstruct_path<N, C>(parent: &HashMap<N, (Option<N>, C)>, mut node: N) -> (Vec<N>, C)
 where
     N: Hash + Eq + Clone,
-    C: Clone
+    C: Clone,
 {
     let mut path = vec![node.clone()];
     let cost = parent[&node].1.clone();
@@ -139,12 +143,32 @@ impl<N: Eq, C: Ord> PartialOrd for SearchNode<N, C> {
     }
 }
 
+/// Reverse the ordering of an option such that `None` is greater than `Some`
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub struct RevSome<T>(pub Option<T>);
+
+impl<T: Ord> Ord for RevSome<T> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (self.0.as_ref(), other.0.as_ref()) {
+            (Some(a), Some(b)) => a.cmp(b),
+            (Some(_), None) => Ordering::Less,
+            (None, Some(_)) => Ordering::Greater,
+            (None, None) => Ordering::Equal,
+        }
+    }
+}
+
+impl<T: Ord> PartialOrd for RevSome<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
 #[cfg(test)]
 mod tests {
 
     use std::collections::BinaryHeap;
 
-    use crate::search::{reconstruct_path, SearchNode};
+    use crate::search::{reconstruct_path, RevSome, SearchNode};
 
     #[test]
     fn test_reconstruct_path() {
@@ -168,5 +192,15 @@ mod tests {
         assert_eq!(open.pop().unwrap().node, 0);
         assert_eq!(open.pop().unwrap().node, 1);
         assert_eq!(open.pop().unwrap().node, 2);
+    }
+
+    #[test]
+    fn test_rev_some() {
+        let a = RevSome(Some(1));
+        let b = RevSome(Some(2));
+        let c = RevSome(None);
+        assert!(a < b);
+        assert!(b < c);
+        assert!(a < c);
     }
 }

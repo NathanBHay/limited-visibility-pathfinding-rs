@@ -8,7 +8,8 @@ use super::{BestSearch, Search, SearchNode};
 use std::{
     collections::{BinaryHeap, HashMap},
     hash::Hash,
-    ops::Add, sync::Arc,
+    ops::Add,
+    sync::Arc,
 };
 
 /// A-Star Search
@@ -18,16 +19,20 @@ where
     C: Ord + Default + Clone + Add<Output = C> + Sync,
 {
     pub heuristic: Arc<dyn Fn(&N) -> C + Sync + Send>,
+    pub best_heuristic: Arc<dyn Fn(&N) -> C + Sync + Send>,
 }
 
-impl <N, C> AStar<N, C>
+impl<N, C> AStar<N, C>
 where
     N: Hash + Clone + Eq + Sync,
     C: Ord + Default + Clone + Add<Output = C> + Sync,
 {
     /// Create a new A-Star search
     pub fn new(heuristic: Arc<dyn Fn(&N) -> C + Sync + Send>) -> Self {
-        AStar { heuristic }
+        AStar {
+            best_heuristic: heuristic.clone(),
+            heuristic,
+        }
     }
 }
 
@@ -78,30 +83,34 @@ where
     C: Ord + Default + Clone + Add<Output = C> + Sync,
 {
     fn get_best_heuristic(&self) -> &Arc<dyn Fn(&N) -> C + Sync + Send> {
-        &self.heuristic
+        &self.best_heuristic
+    }
+
+    fn set_best_heuristic(&mut self, heuristic: Arc<dyn Fn(&N) -> C + Sync + Send>) {
+        self.best_heuristic = heuristic;
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::AStar;
-    use crate::{domains::{bitpackedgrid::BitPackedGrid, DomainCreate}, search::Search};
+    use crate::{
+        domains::{bitpackedgrid::BitPackedGrid, DomainCreate},
+        search::Search,
+    };
     use std::sync::Arc;
 
     #[test]
     fn test_astar() {
-        let results = AStar::new(
-            Arc::new(|x| *x),
-        ).search(|x| vec![(x + 1, 1), (x + 2, 2)], 0, |x| *x == 2);
+        let results =
+            AStar::new(Arc::new(|x| *x)).search(|x| vec![(x + 1, 1), (x + 2, 2)], 0, |x| *x == 2);
         assert_eq!(results.unwrap().0, vec![0, 2]);
     }
 
     #[test]
     fn test_astar_bitpacked_grid() {
         let grid = BitPackedGrid::new_from_string(".....\n.###.\n.#...\n.#.#.\n...#.".to_string());
-        let path = AStar::new(
-            Arc::new(|_| 0),
-        ).search(
+        let path = AStar::new(Arc::new(|_| 0)).search(
             |(x, y)| {
                 grid.adjacent((x.clone(), y.clone()), false)
                     .map(|(x, y)| ((x, y), 1))
@@ -120,9 +129,7 @@ mod tests {
         let grid = BitPackedGrid::new_from_string(
             "........\n...###..\n.....#..\n.....#..\n........\n........".to_string(),
         );
-        let path = AStar::new(
-            Arc::new(|_| 0),
-        ).search(
+        let path = AStar::new(Arc::new(|_| 0)).search(
             |(x, y)| {
                 grid.adjacent((x.clone(), y.clone()), false)
                     .map(|(x, y)| ((x, y), 1))
@@ -149,5 +156,4 @@ mod tests {
             ]
         );
     }
-
 }

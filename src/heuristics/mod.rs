@@ -7,3 +7,4 @@
 
 #![allow(dead_code)]
 pub mod distance;
+pub mod probability;

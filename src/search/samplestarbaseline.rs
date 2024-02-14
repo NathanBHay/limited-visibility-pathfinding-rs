@@ -15,8 +15,9 @@ use crate::{
     util::matrix::Matrix,
 };
 
-use super::{pathstore::PathStore, samplestar::PathStoreT, samplestarstats::SampleStarStats, BestSearch};
-
+use super::{
+    pathstore::PathStore, samplestar::PathStoreT, samplestarstats::SampleStarStats, BestSearch,
+};
 
 /// Sample Star Algorithm
 /// ## Arguments
@@ -86,18 +87,18 @@ impl<S: BestSearch<(usize, usize), usize> + Sync> SampleStarBaseline<S> {
         self.no_path_store.lock().unwrap().reinitialize();
         self.stats.lock().unwrap().clear();
         self.grid.raycast_update(self.current, &self.kernel);
-        self.sampled_before.raycast_set_radius(&self.grid, self.current, 2, true);
-        let sampled_before = self.sampled_before.clone();
-        println!("{}", sampled_before.print_cells(None));
+        self.sampled_before
+            .raycast_set_radius(&self.grid, self.current, 2, true);
         // Keeping a seperate count should allow for less contention on the lock
         // as path_store.len() is unneccesary.
         let valid_paths = Arc::new(Mutex::new(0));
         (0..self.epoch).into_par_iter().for_each(|_| {
             let mut gridmap = BitPackedGrid::new(self.grid.width, self.grid.height);
             gridmap.invert();
-            self.grid.sample_based_on_grid(&mut gridmap, &sampled_before);
+            self.grid
+                .sample_based_on_grid(&mut gridmap, &self.sampled_before);
             let (path, weight) = self.search.best_search(
-                |n| gridmap.adjacent1(*n).filter(|(n, _)| self.grid.get_value(*n)).collect::<Vec<_>>(),
+                |n| gridmap.adjacent1(*n).collect::<Vec<_>>(),
                 self.current,
                 |n| *n == self.goal,
             );
@@ -114,7 +115,7 @@ impl<S: BestSearch<(usize, usize), usize> + Sync> SampleStarBaseline<S> {
             {
                 let mut stats = self.stats.lock().unwrap();
                 stats.run_path_stats(&self.grid, &path);
-                stats.add(1, sampled_before.count_ones() as f32);
+                stats.add(1, self.sampled_before.count_ones() as f32);
                 stats.add(2, weight as f32);
             }
             if found_path {

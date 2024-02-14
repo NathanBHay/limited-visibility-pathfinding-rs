@@ -12,6 +12,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use crate::{
     domains::{bitpackedgrid::BitPackedGrid, samplegrid::SampleGrid, Domain},
+    heuristics::probability::compute_probability,
     util::{filter::KalmanNode, matrix::Matrix},
 };
 
@@ -84,6 +85,8 @@ impl<S: BestSearch<(usize, usize), usize> + Sync> SampleStar<S> {
         self.no_path_store.lock().unwrap().reinitialize();
         self.stats.lock().unwrap().clear();
         self.grid.raycast_update(self.current, &self.kernel);
+        self.search
+            .set_best_heuristic(compute_probability(&self.grid, self.goal));
         // Keeping a seperate count should allow for less contention on the lock
         // as path_store.len() is unneccesary.
         let valid_paths = Arc::new(Mutex::new(0));

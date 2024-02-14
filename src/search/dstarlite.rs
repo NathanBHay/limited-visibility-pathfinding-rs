@@ -1,6 +1,5 @@
 use super::SearchNode;
 use std::{
-    cmp::Ordering,
     collections::{BinaryHeap, HashMap},
     fmt::Debug,
     hash::Hash,
@@ -8,26 +7,7 @@ use std::{
     vec,
 };
 
-/// Reverse the ordering of an option such that `None` is greater than `Some`
-#[derive(Clone, Eq, PartialEq, Debug)]
-struct RevSome<T>(Option<T>);
-
-impl<T: Ord> Ord for RevSome<T> {
-    fn cmp(&self, other: &Self) -> Ordering {
-        match (self.0.as_ref(), other.0.as_ref()) {
-            (Some(a), Some(b)) => a.cmp(b),
-            (Some(_), None) => Ordering::Less,
-            (None, Some(_)) => Ordering::Greater,
-            (None, None) => Ordering::Equal,
-        }
-    }
-}
-
-impl<T: Ord> PartialOrd for RevSome<T> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
+use super::RevSome;
 
 /// D* Lite Search Algorithm
 /// ## Arguments
@@ -250,16 +230,6 @@ mod tests {
     use crate::domains::bitpackedgrid::BitPackedGrid;
     use crate::domains::DomainCreate;
     use crate::heuristics::distance::manhattan_distance;
-
-    #[test]
-    fn test_rev_some() {
-        let a = RevSome(Some(1));
-        let b = RevSome(Some(2));
-        let c = RevSome(None);
-        assert!(a < b);
-        assert!(b < c);
-        assert!(a < c);
-    }
 
     #[test]
     fn test_shortest_distance() {
