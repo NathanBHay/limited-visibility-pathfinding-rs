@@ -15,8 +15,9 @@ use crate::{
     util::matrix::Matrix,
 };
 
-use super::{pathstore::PathStore, samplestar::PathStoreT, samplestarstats::SampleStarStats, BestSearch};
-
+use super::{
+    pathstore::PathStore, samplestar::PathStoreT, samplestarstats::SampleStarStats, BestSearch,
+};
 
 /// Sample Star Algorithm
 /// ## Arguments
@@ -95,7 +96,7 @@ impl<S: BestSearch<(usize, usize), usize> + Sync> SampleStarBaseline<S> {
             gridmap.invert();
             self.grid.sample_based_on_grid(&mut gridmap, &self.sampled_before);
             let (path, weight) = self.search.best_search(
-                |n| gridmap.adjacent1(*n).filter(|(n, _)| self.grid.get_value(*n)).collect::<Vec<_>>(),
+                |n| gridmap.adjacent1(*n).collect::<Vec<_>>(),
                 self.current,
                 |n| !self.sampled_before.get_value(*n) || *n == self.goal,
             );

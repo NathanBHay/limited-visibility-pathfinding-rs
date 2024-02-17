@@ -1,5 +1,7 @@
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
+use ordered_float::OrderedFloat;
+use rand::Rng;
 
 use super::bitpackedgrid::BitPackedGrid;
 use super::{Domain, DomainCreate, DomainPrint, DomainVisibility, RadiusCalc};
@@ -244,12 +246,26 @@ impl SampleGrid {
     }
 
     /// Get all adjacenct cells on sampling grid
-    pub fn adjacent(
+    pub fn adjacent(&self, (x, y): (usize, usize), diagonal: bool) -> Vec<(usize, usize)> {
+        super::neighbors((x, y), diagonal)
+            .filter(|(x, y)| self.bounds_check((*x, *y)))
+            .collect()
+    }
+
+    pub fn adjacent_probs(
         &self,
         (x, y): (usize, usize),
         diagonal: bool,
-    ) -> Vec<(usize, usize)> {
-        super::neighbors((x, y), diagonal).filter(|(x, y)| self.bounds_check((*x, *y))).collect()
+    ) -> Vec<((usize, usize), OrderedFloat<f32>)> {
+        self.adjacent((x, y), diagonal)
+            .iter()
+            .map(|n| {
+                (
+                    *n,
+                    OrderedFloat(-1.0 * self.sample_grid[n.0][n.1].state.log2()),
+                )
+            })
+            .collect()
     }
 
     /// Samples all adjacent cells on sampling grid
@@ -277,7 +293,9 @@ impl SampleGrid {
 #[cfg(test)]
 mod tests {
     use crate::{
-        domains::{bitpackedgrid::BitPackedGrid, Domain, DomainCreate, DomainPrint, DomainVisibility},
+        domains::{
+            bitpackedgrid::BitPackedGrid, Domain, DomainCreate, DomainPrint, DomainVisibility,
+        },
         matrix,
         util::matrix::{gaussian_kernal, Matrix},
     };
@@ -357,7 +375,7 @@ mod tests {
     fn test_adjacency_kernel() {
         let kernel = SampleGrid::adjacency_kernel(&matrix![1.0; 3]);
         assert_eq!(
-            kernel, 
+            kernel,
             matrix![
                 [Some(1.0), Some(0.0), Some(1.0)],
                 [Some(0.0), Some(0.0), Some(0.0)],
@@ -370,13 +388,16 @@ mod tests {
     fn test_grid_visibility() {
         let grid = SampleGrid::new_from_string("\n@@@.\n@...\n@.@.\n".to_string());
         let visiblility = grid.visibility((1, 1), 2);
-        assert_eq!(visiblility, matrix![
-            [false, false, false, false, false],
-            [false, true, true, true, true],
-            [false, true, true, true, true],
-            [false, true, true, true, true],
-            [false, false, false, false, false],
-        ]);
+        assert_eq!(
+            visiblility,
+            matrix![
+                [false, false, false, false, false],
+                [false, true, true, true, true],
+                [false, true, true, true, true],
+                [false, true, true, true, true],
+                [false, false, false, false, false],
+            ]
+        );
     }
 
     #[test]
@@ -394,4 +415,3 @@ mod tests {
         assert!(grid.sample_grid[2][0].state == 0.6);
     }
 }
-    

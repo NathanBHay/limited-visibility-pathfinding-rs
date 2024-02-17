@@ -7,6 +7,8 @@ use std::{cmp::Ord, hash::Hash, ops::Add};
 
 use ahash::AHashMap;
 
+use super::RevSome;
+
 /// PathStore is a trait that defines the interface for storing multiple paths
 /// as to be able to find most commomly taken paths. `Send` is required to allow
 /// for the store to be used in parallel.
@@ -55,10 +57,10 @@ impl<N: Eq + Hash + Send, W: Send> AccStore<N, W> {
     }
 }
 
-impl<N, W> PathStore<N, W> for AccStore<N, W> 
+impl<N, W> PathStore<N, W> for AccStore<N, W>
 where
     N: Clone + Eq + Hash + Send,
-    W: Add<Output = W> + Clone + Default + Ord + Send
+    W: Add<Output = W> + Clone + Default + Ord + Send,
 {
     fn reinitialize(&mut self) {
         self.store.clear();
@@ -72,7 +74,8 @@ where
     }
 
     fn next_node(&self, nodes: Vec<N>) -> Option<N> {
-        nodes.into_iter()
+        nodes
+            .into_iter()
             .filter(|n| self.contains(n))
             .max_by_key(|n| self.store.get(n).unwrap())
     }
@@ -86,7 +89,10 @@ where
     }
 
     fn visualise(&self) -> Vec<(N, W)> {
-        self.store.iter().map(|(n, w)| (n.clone(), w.clone())).collect()
+        self.store
+            .iter()
+            .map(|(n, w)| (n.clone(), w.clone()))
+            .collect()
     }
 }
 
@@ -97,7 +103,7 @@ impl<N: Eq + Hash + Send> AccStore<N, usize> {
     }
 }
 
-/// Keeps a store of only the best path to a given node 
+/// Keeps a store of only the best path to a given node
 pub struct GreedyStore<N: Eq + Hash + Send, W: Send> {
     store: Vec<N>,
     weight: Option<W>,
@@ -115,20 +121,22 @@ impl<N: Eq + Hash + Send, W: Send> GreedyStore<N, W> {
     }
 }
 
-impl<N, W> PathStore<N, W> for GreedyStore<N, W> 
+impl<N, W> PathStore<N, W> for GreedyStore<N, W>
 where
     N: Clone + Eq + Hash + Send + core::fmt::Debug,
-    W: Clone + Default + Ord + Send
+    W: Clone + Default + Ord + Send + core::fmt::Debug,
 {
     fn reinitialize(&mut self) {
         self.store.clear();
         self.weight = None;
     }
 
-    fn add_path(&mut self, path: Vec<N>, _weight: W) {
-        self.store = path;
-        if let Some(node) = self.store.last() {
-            self.weight = Some((self.heuristic)(node));
+    fn add_path(&mut self, path: Vec<N>, weight: W) {
+        if RevSome(Some(weight)) < RevSome(self.weight.clone()) {
+            self.store = path;
+            if let Some(node) = self.store.last() {
+                self.weight = Some((self.heuristic)(node));
+            }
         }
     }
 
@@ -145,6 +153,9 @@ where
     }
 
     fn visualise(&self) -> Vec<(N, W)> {
-        self.store.iter().map(|n| (n.clone(), self.weight.clone().unwrap())).collect()
+        self.store
+            .iter()
+            .map(|n| (n.clone(), self.weight.clone().unwrap()))
+            .collect()
     }
 }
