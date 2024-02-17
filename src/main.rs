@@ -43,7 +43,7 @@ fn run_sample_star(map: Problem, epoch: usize, limit: usize) {
     // );
     let mut samplestar =
         SampleStarBaseline::new(init_grid(file, start, goal), search, start, goal, epoch, init_update_kernel(), path_store, no_path_store, init_stats());
-    let visualiser = Visualiser::new(name, &samplestar.grid, Some(start), Some(goal));
+    let visualiser = Visualiser::new(format!("out/{}", name).as_str(), &samplestar.grid, Some(start), Some(goal));
     for i in 1..=limit {
         if samplestar.step() {
             break;

@@ -88,7 +88,6 @@ impl<S: BestSearch<(usize, usize), usize> + Sync> SampleStarBaseline<S> {
         self.grid.raycast_update(self.current, &self.kernel);
         self.sampled_before.raycast_set_radius(&self.grid, self.current, 2, true);
         let sampled_before = self.sampled_before.clone();
-        println!("{}", sampled_before.print_cells(None));
         // Keeping a seperate count should allow for less contention on the lock
         // as path_store.len() is unneccesary.
         let valid_paths = Arc::new(Mutex::new(0));
