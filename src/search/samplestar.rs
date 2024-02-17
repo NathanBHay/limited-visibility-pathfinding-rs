@@ -7,6 +7,7 @@
 //! Heuristics could include ones that take into account probability of being an obstacle:
 //! `self.grid.sample_grid[x][y].state * manhattan_distance(n*, self.goal)`
 
+use rand::SeedableRng;
 use rayon::prelude::*;
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -90,7 +91,7 @@ impl<S: BestSearch<(usize, usize), usize> + Sync> SampleStar<S> {
         (0..self.epoch).into_par_iter().for_each(|_| {
             let mut gridmap = BitPackedGrid::new(self.grid.width, self.grid.height);
             let mut sampled_before = gridmap.clone();
-            let mut rng = rand::thread_rng(); // Incrementally improves performance
+            let mut rng = rand::rngs::SmallRng::from_entropy(); // Incrementally improves performance
             let (path, weight) = self.search.best_search(
                 |n| {
                     self.grid

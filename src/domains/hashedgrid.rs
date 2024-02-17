@@ -3,7 +3,7 @@
 //! This is the simplest grid implementation and is fairly slow due
 //! to the possibility of hashing collisions.
 
-use std::collections::HashSet;
+use ahash::AHashSet;
 
 use super::{neighbors, Domain, DomainCreate, DomainPrint};
 
@@ -17,7 +17,7 @@ use super::{neighbors, Domain, DomainCreate, DomainPrint};
 pub struct HashedGrid {
     pub width: usize,
     pub height: usize,
-    pub valid_cells: HashSet<usize>,
+    pub valid_cells: AHashSet<usize>,
 }
 
 impl Domain for HashedGrid {
@@ -26,7 +26,7 @@ impl Domain for HashedGrid {
         HashedGrid {
             width,
             height,
-            valid_cells: HashSet::new(),
+            valid_cells: AHashSet::new(),
         }
     }
 

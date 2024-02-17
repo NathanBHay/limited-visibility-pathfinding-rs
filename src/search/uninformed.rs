@@ -4,9 +4,11 @@
 //! * Depth-First Search
 
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::VecDeque,
     hash::Hash, ops::Add,
 };
+
+use ahash::AHashMap;
 
 use super::Search;
 
@@ -25,14 +27,14 @@ where
     N: Hash + Eq + Clone,
     C: Ord + Clone + Default + Add<Output = C>,
 {
-    fn _search<E, I, G>(&self, mut expander: E, start: N, goal: G) -> (HashMap<N, (Option<N>, C)>, Option<N>)
+    fn _search<E, I, G>(&self, mut expander: E, start: N, goal: G) -> (AHashMap<N, (Option<N>, C)>, Option<N>)
         where
             E: FnMut(&N) -> I,
             I: IntoIterator<Item = (N, C)>,
             G: Fn(&N) -> bool 
         {
         let mut queue = VecDeque::new();
-        let mut distance = HashMap::new();
+        let mut distance = AHashMap::new();
         distance.insert(start.clone(), (None, C::default()));
         queue.push_back((start, C::default()));
         while let Some((node, cost)) = queue.pop_front() {
@@ -66,14 +68,14 @@ where
     N: Hash + Eq + Clone,
     C: Ord + Clone + Default + Add<Output = C>,
 {
-    fn _search<E, I, G>(&self, mut expander: E, start: N, goal: G) -> (HashMap<N, (Option<N>, C)>, Option<N>)
+    fn _search<E, I, G>(&self, mut expander: E, start: N, goal: G) -> (AHashMap<N, (Option<N>, C)>, Option<N>)
         where
             E: FnMut(&N) -> I,
             I: IntoIterator<Item = (N, C)>,
             G: Fn(&N) -> bool 
         {
         let mut stack = Vec::new();
-        let mut distance = HashMap::new();
+        let mut distance = AHashMap::new();
         distance.insert(start.clone(), (None, C::default()));
         stack.push((start, C::default()));
         while let Some((node, cost)) = stack.pop() {

@@ -2,9 +2,9 @@
 //!
 //! Future optimisation could be to output in BinCode format as it is interpertable by python.
 //! This would allow for faster output of the data. Another approac
+use ahash::AHashMap;
 use serde_json::json;
 use std::{
-    collections::HashMap,
     fs::File,
     io::{BufWriter, Write},
 };
@@ -22,7 +22,7 @@ pub struct Visualiser {
 // TODO: Statistics Store is an expandable store that keeps track of certain stats. It will
 // be a attribute within sample star. It will run every loop and update the stats.
 // The stats method will take in a both bit packed grids and will will run a set
-// of functions on them to get the stats. The stats will be returned as a hashmap
+// of functions on them to get the stats. The stats will be returned as a AHashMap
 
 impl Visualiser {
     /// Create a new visualiser for a `SampleGrid` with a start and goal
@@ -88,7 +88,7 @@ impl Visualiser {
 
     /// Visualise the final path found by the algorithm
     pub fn visualise_final_path(&self, final_path: &Vec<(usize, usize)>) {
-        let mut paths = HashMap::new();
+        let mut paths = AHashMap::new();
         for i in 0..final_path.len() - 1 {
             let node = (
                 final_path[i].min(final_path[i + 1]),

@@ -4,9 +4,12 @@
 //! [Warthog](https://bitbucket.org/dharabor/pathfinding/src/master/), however
 //! is not as optimized and lacks choice of a queue.
 
+use ahash::AHashMap;
+use rand::{rngs::SmallRng, Rng, SeedableRng};
+
 use super::{BestSearch, Search, SearchNode};
 use std::{
-    collections::{BinaryHeap, HashMap},
+    collections::BinaryHeap,
     hash::Hash,
     ops::Add, sync::Arc,
 };
@@ -41,7 +44,7 @@ where
         mut expander: E,
         start: N,
         goal: G,
-    ) -> (HashMap<N, (Option<N>, C)>, Option<N>)
+    ) -> (AHashMap<N, (Option<N>, C)>, Option<N>)
     where
         E: FnMut(&N) -> I,
         I: IntoIterator<Item = (N, C)>,
@@ -50,8 +53,10 @@ where
         let mut open = BinaryHeap::from([SearchNode {
             node: start.clone(),
             cost: (self.heuristic)(&start),
+            random_key: 0,
         }]);
-        let mut previous = HashMap::new();
+        let mut rng = SmallRng::from_entropy();
+        let mut previous = AHashMap::new();
         previous.insert(start.clone(), (None, C::default()));
         while let Some(SearchNode { node, .. }) = open.pop() {
             if goal(&node) {
@@ -64,6 +69,7 @@ where
                     open.push(SearchNode {
                         node: child.clone(),
                         cost: new_cost.clone() + (self.heuristic)(&child),
+                        random_key: rng.gen(),
                     });
                 }
             }

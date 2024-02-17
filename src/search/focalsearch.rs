@@ -1,18 +1,21 @@
 use std::{
-    collections::{BTreeMap, BinaryHeap, HashMap, HashSet},
+    collections::{BTreeMap, BinaryHeap},
     hash::Hash,
     ops::Add,
     sync::Arc,
 };
 
+use ahash::{AHashMap, AHashSet};
+use rand::{rngs::SmallRng, Rng, SeedableRng};
+
 use super::{BestSearch, Search, SearchNode};
 
 /// Open list for Focal Search. Supports insertion, removal, and popping the best node
-struct FSOpenList<N: Clone + Eq + Hash, C: Clone + Ord>(BTreeMap<C, HashSet<N>>);
+struct FSOpenList<N: Clone + Eq + Hash, C: Clone + Ord>(BTreeMap<C, AHashSet<N>>);
 
 impl<N: Clone + Eq + Hash, C: Clone + Ord> FSOpenList<N, C> {
     fn insert(&mut self, node: N, cost: C) {
-        self.0.entry(cost).or_insert_with(HashSet::new).insert(node);
+        self.0.entry(cost).or_insert_with(AHashSet::new).insert(node);
     }
 
     fn remove(&mut self, node: &N, cost: &C) -> bool {
@@ -91,12 +94,13 @@ where
         mut expander: E,
         start: N,
         goal: G,
-    ) -> (HashMap<N, (Option<N>, C)>, Option<N>)
+    ) -> (AHashMap<N, (Option<N>, C)>, Option<N>)
     where
         E: FnMut(&N) -> I,
         I: IntoIterator<Item = (N, C)>,
         G: Fn(&N) -> bool,
     {
+        let mut rng = SmallRng::from_entropy();
         let mut open = FSOpenList(BTreeMap::new());
         open.insert(start.clone(), (self.heuristic)(&start));
         // Focal can be implemented as a heap sorted with the focal heuristic or as
@@ -107,13 +111,15 @@ where
         let mut focal = BinaryHeap::from([SearchNode {
             node: start.clone(),
             cost: ((self.focal_heuristic)(&start), (self.heuristic)(&start)),
+            random_key: rng.gen(),
         }]);
-        let mut previous = HashMap::new();
+        let mut previous = AHashMap::new();
         previous.insert(start.clone(), (None, C::default()));
 
         while let Some(SearchNode {
             node,
             cost: (fcost, hcost),
+            ..
         }) = focal.pop()
         {
             if goal(&node) {
@@ -135,7 +141,8 @@ where
                         focal.push(SearchNode {
                             node: child.clone(),
                             cost: (new_cost.clone() + (self.focal_heuristic)(&child), child_h), // TODO: No use of previous
-                        });
+                            random_key: rng.gen(),
+                    });
                     }
                 }
             }
@@ -150,7 +157,8 @@ where
                                     previous[node].1.clone() + (self.focal_heuristic)(&node),
                                     cost.clone(),
                                 ),
-                            });
+                                random_key: rng.gen(),
+                        });
                         }
                     }
                 }

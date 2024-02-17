@@ -3,7 +3,7 @@
 //! * Recursive Shadowcasting
 //! These implementations are generally based upon code from RogueBasin.
 
-use std::collections::HashMap;
+use ahash::AHashMap;
 
 use super::linedrawing::bresenham;
 use crate::matrix;
@@ -53,7 +53,7 @@ pub fn shadowcasting(
     visibility_check: impl Fn(usize, usize) -> bool,
 ) -> Vec<((usize, usize), f32)> {
     let offsets = vec![(-1, -1), (1, -1), (-1, 1), (1, 1)];
-    let mut light_map = HashMap::new();
+    let mut light_map = AHashMap::new();
     light_map.insert((x, y), 1.0);
     for (dx, dy) in offsets {
         lightcast(
@@ -90,7 +90,7 @@ fn lightcast(
     end: f32,
     (xx, xy, yx, yy): (isize, isize, isize, isize),
     radius: usize,
-    light_map: &mut HashMap<(usize, usize), f32>,
+    light_map: &mut AHashMap<(usize, usize), f32>,
     bounds_check: &impl Fn(usize, usize) -> bool,
     visibility_check: &impl Fn(usize, usize) -> bool,
 ) {

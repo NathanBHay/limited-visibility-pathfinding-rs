@@ -1,18 +1,19 @@
 use std::collections::hash_map::ValuesMut;
-use std::collections::HashMap;
 use std::hash::Hash;
 use std::ops::{Index, IndexMut};
 
+use ahash::AHashMap;
+
 #[derive(Debug, Clone)]
-pub struct AdjacencyList<N: Eq + Hash, W>(HashMap<N, Vec<(N, W)>>);
+pub struct AdjacencyList<N: Eq + Hash, W>(AHashMap<N, Vec<(N, W)>>);
 
 impl<N: Eq + Hash, W> AdjacencyList<N, W> {
     pub fn new() -> Self {
-        Self(HashMap::new())
+        Self(AHashMap::new())
     }
 
     pub fn new_nodes(nodes: Vec<N>) -> Self {
-        let mut map = HashMap::new();
+        let mut map = AHashMap::new();
         for node in nodes {
             map.insert(node, Vec::new());
         }

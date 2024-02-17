@@ -1,6 +1,8 @@
 #![allow(dead_code)]
 
-use std::{cmp::Ordering, collections::HashMap, hash::Hash, sync::Arc};
+use std::{cmp::Ordering, hash::Hash, sync::Arc};
+
+use ahash::AHashMap;
 
 pub mod astar;
 pub mod dstarlite;
@@ -38,15 +40,15 @@ where
         }
     }
 
-    /// Search function that is implemented. Returns a HashMap to allow for optional path
+    /// Search function that is implemented. Returns a AHashMap to allow for optional path
     /// reconstruction and cost retrieval for any node.
     /// ## Arguments
     /// * `expander` - The expander function that returns the children of a node
     /// * `start` - The starting node
     /// * `goal` - The goal function that returns true if the node is the goal
     /// ## Returns
-/// A HashMap of nodes to their parent nodes and the cost to reach them and the goal node
-    fn _search<E, I, G>(&self, expander: E, start: N, goal: G) -> (HashMap<N, (Option<N>, C)>, Option<N>)
+/// A AHashMap of nodes to their parent nodes and the cost to reach them and the goal node
+    fn _search<E, I, G>(&self, expander: E, start: N, goal: G) -> (AHashMap<N, (Option<N>, C)>, Option<N>)
     where
         E: FnMut(&N) -> I,
         I: IntoIterator<Item = (N, C)>,
@@ -103,7 +105,7 @@ where
 /// ## Returns
 /// A vector of nodes from the start to the given node and the cost of the path
 fn reconstruct_path<N, C>(
-    parent: &HashMap<N, (Option<N>, C)>,
+    parent: &AHashMap<N, (Option<N>, C)>,
     mut node: N,
 ) -> (Vec<N>, C)
 where
@@ -120,16 +122,26 @@ where
     (path, cost)
 }
 
-/// Search node used in A-Star/Focal/D-Star Binary Heap
+/// Search node used in A-Star/Focal/D-Star Binary Heap.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub(crate) struct SearchNode<N: Eq, C: Ord> {
     node: N,
     cost: C,
+    random_key: u32, // Used to break ties, improves performance
+}
+
+impl <N: Eq, C: Ord> SearchNode<N, C> {
+    /// Create a new search node
+    pub fn new(node: N, cost: C) -> Self {
+        let random_key = rand::random();
+        Self { node, cost, random_key }
+    }
 }
 
 impl<N: Eq, C: Ord> Ord for SearchNode<N, C> {
     fn cmp(&self, other: &Self) -> Ordering {
         self.cost.cmp(&other.cost).reverse()
+            .then_with(|| self.random_key.cmp(&other.random_key))
     }
 }
 
@@ -148,7 +160,7 @@ mod tests {
 
     #[test]
     fn test_reconstruct_path() {
-        let mut parent = std::collections::HashMap::new();
+        let mut parent = ahash::AHashMap::new();
         parent.insert(1, (None, 0));
         parent.insert(2, (Some(1), 1));
         parent.insert(3, (Some(2), 2));
@@ -162,9 +174,9 @@ mod tests {
     #[test]
     fn test_search_node() {
         let mut open = BinaryHeap::new();
-        open.push(SearchNode { node: 1, cost: 1 });
-        open.push(SearchNode { node: 0, cost: 0 });
-        open.push(SearchNode { node: 2, cost: 2 });
+        open.push(SearchNode::new(1, 1));
+        open.push(SearchNode::new(0, 0));
+        open.push(SearchNode::new(2, 2));
         assert_eq!(open.pop().unwrap().node, 0);
         assert_eq!(open.pop().unwrap().node, 1);
         assert_eq!(open.pop().unwrap().node, 2);

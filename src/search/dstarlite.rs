@@ -1,7 +1,9 @@
+use ahash::AHashMap;
+
 use super::SearchNode;
 use std::{
     cmp::Ordering,
-    collections::{BinaryHeap, HashMap},
+    collections::BinaryHeap,
     fmt::Debug,
     hash::Hash,
     ops::Add,
@@ -58,9 +60,9 @@ where
     /// k_m is the lookahead value
     k_m: C,
     /// RHS values are one-step ahead lookahead values
-    rhs: HashMap<N, C>,
+    rhs: AHashMap<N, C>,
     /// G values are an estimate of distance to nodes
-    g_score: HashMap<N, C>,
+    g_score: AHashMap<N, C>,
     /// The frontier priority queue of nodes to be expanded
     queue: BinaryHeap<SearchNode<N, Option<(C, C)>>>,
     /// The last node that was mutated
@@ -87,13 +89,13 @@ where
             final_path: vec![start.clone()],
             heuristic,
             mutator,
-            rhs: HashMap::from([(start.clone(), C::default())]),
+            rhs: AHashMap::from([(start.clone(), C::default())]),
             k_m: C::default(),
-            g_score: HashMap::new(),
-            queue: BinaryHeap::from([SearchNode {
-                node: goal,
-                cost: Some((start_h, C::default())),
-            }]),
+            g_score: AHashMap::new(),
+            queue: BinaryHeap::from([SearchNode::new(
+                goal,
+                Some((start_h, C::default())),
+            )]),
             s_last: start,
         };
         dstar.compute_shortest_dist();
@@ -144,16 +146,16 @@ where
     fn update_vertex(&mut self, node: N) {
         self.queue.retain(|x| x.node != node);
         if self.g_score.get(&node) != self.rhs.get(&node) {
-            self.queue.push(SearchNode {
-                node: node.clone(),
-                cost: self.calculate_key(&node),
-            });
+            self.queue.push(SearchNode::new(
+                node.clone(),
+                self.calculate_key(&node),
+            ));
         }
     }
 
     /// Compute the shortest path similar to a*
     fn compute_shortest_dist(&mut self) {
-        while let Some(SearchNode { node, cost }) = self.queue.pop() {
+        while let Some(SearchNode{ node, cost, .. }) = self.queue.pop() {
             println!(
                 "{:?} | {:?}",
                 self.rhs.get(&self.current),
@@ -168,10 +170,10 @@ where
             // self.queue.retain(|x| x.node != node);
             if cost < new_cost {
                 self.queue.retain(|x| x.node != node); // This might be able to be removed
-                self.queue.push(SearchNode {
-                    node: node.clone(),
-                    cost: new_cost,
-                });
+                self.queue.push(SearchNode::new(
+                    node.clone(),
+                    new_cost,
+                ));
             } else if RevSome(self.g_score.get(&node)) > RevSome(self.rhs.get(&node)) {
                 self.g_score
                     .insert(node.clone(), self.rhs.get(&node).unwrap().clone());

@@ -1,5 +1,5 @@
-use rand::rngs::ThreadRng;
-use rand::Rng;
+use rand::rngs::SmallRng;
+use rand::{Rng, SeedableRng};
 
 use super::bitpackedgrid::BitPackedGrid;
 use super::{Domain, DomainCreate, DomainPrint, DomainVisibility, RadiusCalc};
@@ -129,11 +129,11 @@ impl SampleGrid {
 
     /// Samples a cell with a given chance
     pub fn sample<'a>(&self, gridmap: &'a mut BitPackedGrid, (x, y): (usize, usize)) -> bool {
-        self.sample_cached(gridmap, &mut rand::thread_rng(), (x, y))
+        self.sample_cached(gridmap, &mut SmallRng::from_entropy(), (x, y))
     }
 
     /// Samples a cell with a given chance caching the random number generator
-    pub fn sample_cached<'a>(&self, gridmap: &'a mut BitPackedGrid, rng: &mut ThreadRng, (x, y): (usize, usize)) -> bool {
+    pub fn sample_cached<'a>(&self, gridmap: &'a mut BitPackedGrid, rng: &mut SmallRng, (x, y): (usize, usize)) -> bool {
         let value = self.sample_grid[x][y].state != 0.0
             && rng.gen::<f32>() < self.sample_grid[x][y].state;
         gridmap.set_value((x, y), value);
@@ -148,7 +148,7 @@ impl SampleGrid {
         width: usize,
         height: usize,
     ) {
-        let mut rng = rand::thread_rng();
+        let mut rng = SmallRng::from_entropy();
         for x in x..x + width {
             for y in y..y + height {
                 self.sample_cached(gridmap, &mut rng, (x, y));
@@ -179,7 +179,7 @@ impl SampleGrid {
         gridmap: &'a mut BitPackedGrid,
         sampled_before: &BitPackedGrid,
     ) {
-        let mut rng = rand::thread_rng();
+        let mut rng = SmallRng::from_entropy();
         for x in 0..self.width {
             for y in 0..self.height {
                 if sampled_before.get_value((x, y)) {
@@ -257,10 +257,10 @@ impl SampleGrid {
         &self,
         gridmap: &'a mut BitPackedGrid,
         sampled_before: &'a mut BitPackedGrid,
-        rng: &mut ThreadRng,
+        rng: &mut SmallRng,
         (x, y): (usize, usize),
     ) -> Vec<((usize, usize), usize)> {
-        super::neighbors_cached((x, y), false, Some(rng))
+        super::neighbors((x, y), false)
             .filter(move |(x, y)| {
                 if self.bounds_check((*x, *y)) && !sampled_before.get_value((*x, *y)) {
                     sampled_before.set_value((*x, *y), true);

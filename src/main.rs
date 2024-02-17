@@ -26,7 +26,7 @@ fn main() {
     // for map in maps::MAP_PACK.into_iter() {
     //     run_sample_star(map, 10, 500);
     // }
-    run_sample_star(maps::WALL, 100, 1000);
+    run_sample_star(maps::LAK, 100, 100);
     println!("Time Taken: {}s", now.elapsed().as_secs_f32());
 }
 
@@ -42,13 +42,13 @@ fn run_sample_star(map: Problem, epoch: usize, limit: usize) {
     //     Arc::new(move |_| 0),
     // );
     let mut samplestar =
-        SampleStarBaseline::new(init_grid(file, start, goal), search, start, goal, epoch, init_update_kernel(), path_store, no_path_store, init_stats());
+        SampleStar::new(init_grid(file, start, goal), search, start, goal, epoch, init_update_kernel(), path_store, no_path_store, init_stats());
     let visualiser = Visualiser::new(format!("out/{}", name).as_str(), &samplestar.grid, Some(start), Some(goal));
     for i in 1..=limit {
         if samplestar.step() {
             break;
         }
-        visualiser.visualise_bitpacked_grid(&samplestar.sampled_before, &format!("sampled_before_{}", i));
+        // visualiser.visualise_bitpacked_grid(&samplestar.sampled_before, &format!("sampled_before_{}", i));
         visualiser.visualise_iteration(
             Some(&samplestar.grid),
             i,
