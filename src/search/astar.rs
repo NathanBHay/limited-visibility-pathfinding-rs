@@ -101,7 +101,7 @@ where
 mod tests {
     use super::AStar;
     use crate::{
-        domains::{bitpackedgrid::BitPackedGrid, DomainCreate},
+        domains::{bitpackedgrids::bitpackedgrid2d::BitPackedGrid2d, GridCreate2d},
         search::Search,
     };
     use std::sync::Arc;
@@ -115,7 +115,7 @@ mod tests {
 
     #[test]
     fn test_astar_bitpacked_grid() {
-        let grid = BitPackedGrid::new_from_string(".....\n.###.\n.#...\n.#.#.\n...#.".to_string());
+        let grid = BitPackedGrid2d::new_from_string(".....\n.###.\n.#...\n.#.#.\n...#.".to_string());
         let path = AStar::new(Arc::new(|_| 0)).search(
             |(x, y)| {
                 grid.adjacent((x.clone(), y.clone()), false)
@@ -132,7 +132,7 @@ mod tests {
 
     #[test]
     fn test_astar_bitpacked_grid_with_heuristic() {
-        let grid = BitPackedGrid::new_from_string(
+        let grid = BitPackedGrid2d::new_from_string(
             "........\n...###..\n.....#..\n.....#..\n........\n........".to_string(),
         );
         let path = AStar::new(Arc::new(|_| 0)).search(

@@ -97,7 +97,7 @@ where
     fn get_best_heuristic(&self) -> &Arc<dyn Fn(&N) -> C + Sync + Send>;
 
     /// Optionally overwrite the best heuristic
-    fn set_best_heuristic(&mut self, heuristic: Arc<dyn Fn(&N) -> C + Sync + Send>) {}
+    fn set_best_heuristic(&mut self, _heuristic: Arc<dyn Fn(&N) -> C + Sync + Send>) {}
 }
 
 /// Reconstructs a path from a given node to the start node given a cost

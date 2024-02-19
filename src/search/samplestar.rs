@@ -12,14 +12,14 @@ use rayon::prelude::*;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use crate::{
-    domains::{bitpackedgrid::BitPackedGrid, samplegrid::SampleGrid, Domain},
+    domains::{bitpackedgrids::bitpackedgrid2d::BitPackedGrid2d, samplegrids::samplegrid2d::SampleGrid2d, Domain, Grid2d},
     heuristics::probability::compute_probability,
     util::{filter::KalmanNode, matrix::Matrix},
 };
 
 use super::{pathstore::PathStore, samplestarstats::SampleStarStats, BestSearch};
 
-pub type PathStoreT = Box<dyn PathStore<(usize, usize), usize>>;
+pub type PathStoreT<N> = Box<dyn PathStore<N, usize>>;
 
 /// Sample Star Algorithm
 /// ## Arguments
@@ -34,8 +34,12 @@ pub type PathStoreT = Box<dyn PathStore<(usize, usize), usize>>;
 /// * `stats` - The statistics store to store the stats. Currently built into the
 /// algorithm however it could be moved out. This is due to the fact search results
 /// aren't stored so stats are calculated on the fly.
-pub struct SampleStar<S: BestSearch<(usize, usize), usize> + Sync> {
-    pub grid: SampleGrid,
+pub struct SampleStar<S> 
+where
+    // N: Hash + Eq + Clone,
+    S: BestSearch<(usize, usize), usize> + Sync,
+{
+    pub grid: SampleGrid2d,
     search: S,
     pub previous: (usize, usize),
     pub current: (usize, usize),
@@ -43,23 +47,27 @@ pub struct SampleStar<S: BestSearch<(usize, usize), usize> + Sync> {
     epoch: usize,
     kernel: Matrix<f32>,
     pub final_path: Vec<(usize, usize)>,
-    path_store: Arc<Mutex<PathStoreT>>,
-    no_path_store: Arc<Mutex<PathStoreT>>,
-    pub stats: Arc<Mutex<SampleStarStats>>,
+    path_store: Arc<Mutex<PathStoreT<(usize, usize)>>>,
+    no_path_store: Arc<Mutex<PathStoreT<(usize, usize)>>>,
+    pub stats: Arc<Mutex<SampleStarStats<(usize, usize)>>>,
 }
 
-impl<S: BestSearch<(usize, usize), usize> + Sync> SampleStar<S> {
+impl<S> SampleStar<S> 
+where
+    // N: Hash + Eq + Clone + Send,
+    S: BestSearch<(usize, usize), usize> + Sync,
+{
     /// Creates a new SampleStar algorithm
     pub fn new(
-        grid: SampleGrid,
+        grid: SampleGrid2d,
         search: S,
         start: (usize, usize),
         goal: (usize, usize),
         epoch: usize,
         kernel: Matrix<f32>,
-        path_store: PathStoreT,
-        no_path_store: PathStoreT,
-        stats: SampleStarStats,
+        path_store: PathStoreT<(usize, usize)>,
+        no_path_store: PathStoreT<(usize, usize)>,
+        stats: SampleStarStats<(usize, usize)>,
     ) -> Self {
         assert!(grid.bounds_check(start) && grid.bounds_check(goal));
         Self {
@@ -92,7 +100,7 @@ impl<S: BestSearch<(usize, usize), usize> + Sync> SampleStar<S> {
         // as path_store.len() is unneccesary.
         let valid_paths = Arc::new(Mutex::new(0));
         (0..self.epoch).into_par_iter().for_each(|_| {
-            let mut gridmap = BitPackedGrid::new(self.grid.width, self.grid.height);
+            let mut gridmap = BitPackedGrid2d::new(self.grid.width, self.grid.height);
             let mut sampled_before = gridmap.clone();
             let mut rng = rand::rngs::SmallRng::from_entropy(); // Incrementally improves performance
             let (path, weight) = self.search.best_search(

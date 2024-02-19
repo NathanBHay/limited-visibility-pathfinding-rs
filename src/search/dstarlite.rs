@@ -2,7 +2,6 @@ use ahash::AHashMap;
 
 use super::SearchNode;
 use std::{
-    cmp::Ordering,
     collections::BinaryHeap,
     fmt::Debug,
     hash::Hash,
@@ -230,13 +229,13 @@ where
 mod tests {
 
     use super::*;
-    use crate::domains::bitpackedgrid::BitPackedGrid;
-    use crate::domains::DomainCreate;
+    use crate::domains::bitpackedgrids::bitpackedgrid2d::BitPackedGrid2d;
+    use crate::domains::GridCreate2d;
     use crate::heuristics::distance::manhattan_distance;
 
     #[test]
     fn test_shortest_distance() {
-        let grid = BitPackedGrid::new_from_string(
+        let grid = BitPackedGrid2d::new_from_string(
             "........\n...###..\n.....#..\n.....#..\n........\n........".to_string(),
         );
         let mut dstar = DStarLite::new(
@@ -250,6 +249,7 @@ mod tests {
             |_| vec![],
         );
         assert!(!dstar.step());
+        println!("{:?}", dstar.path());
         // assert_eq!(
         //     dstar.path().unwrap().0,
         //     vec![

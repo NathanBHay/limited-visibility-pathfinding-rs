@@ -9,7 +9,7 @@ use std::{
     io::{BufWriter, Write},
 };
 
-use crate::domains::{bitpackedgrid::BitPackedGrid, samplegrid::SampleGrid, Domain};
+use crate::domains::{bitpackedgrids::bitpackedgrid2d::BitPackedGrid2d, samplegrids::samplegrid2d::SampleGrid2d, Domain};
 
 /// Visualiser tool for visualising `Sample Star` algorithm.
 /// Outputs to JSON format for use with the python visualiser.
@@ -28,7 +28,7 @@ impl Visualiser {
     /// Create a new visualiser for a `SampleGrid` with a start and goal
     pub fn new(
         file_path: &str,
-        sample_grid: &SampleGrid,
+        sample_grid: &SampleGrid2d,
         start: Option<(usize, usize)>,
         goal: Option<(usize, usize)>,
     ) -> Self {
@@ -41,7 +41,7 @@ impl Visualiser {
         visualiser
     }
 
-    pub fn visualise_bitpacked_grid(&self, grid: &BitPackedGrid, name: &str) {
+    pub fn visualise_bitpacked_grid(&self, grid: &BitPackedGrid2d, name: &str) {
         let mut bitpacked_grid = vec![vec![false; grid.height]; grid.width];
         for x in 0..grid.width {
             for y in 0..grid.height {
@@ -58,14 +58,14 @@ impl Visualiser {
     }
 
     /// Visualise the ground truth of the grid
-    fn visualise_ground_truth(&self, grid: &BitPackedGrid) {
+    fn visualise_ground_truth(&self, grid: &BitPackedGrid2d) {
         self.visualise_bitpacked_grid(grid, "ground_truth")
     }
     
     /// Visualise the current state of the grid and found paths
     pub fn visualise_iteration(
         &self,
-        sample_grid: Option<&SampleGrid>,
+        sample_grid: Option<&SampleGrid2d>,
         iteration: usize,
         current: Option<(usize, usize)>,
         next: Option<(usize, usize)>,
@@ -105,7 +105,7 @@ impl Visualiser {
     }
 }
 
-fn get_sample_grid(grid: Option<&SampleGrid>) -> Vec<Vec<f32>> {
+fn get_sample_grid(grid: Option<&SampleGrid2d>) -> Vec<Vec<f32>> {
     match grid {
         Some(grid) => {
             // TODO: Optimize this to copy directly from the grid

@@ -1,7 +1,7 @@
 use std::{ops::Add, sync::Arc};
 
 use crate::{
-    domains::samplegrid::SampleGrid,
+    domains::samplegrids::samplegrid2d::SampleGrid2d,
     search::{astar::AStar, Search},
 };
 use ordered_float::OrderedFloat;
@@ -21,7 +21,7 @@ impl Default for ProbabilityNode {
 }
 
 pub fn compute_probability(
-    grid: &SampleGrid,
+    grid: &SampleGrid2d,
     goal: (usize, usize),
 ) -> Arc<dyn Fn(&(usize, usize)) -> usize + Send + Sync> {
     let astar = AStar::new(Arc::new(|_| ProbabilityNode(OrderedFloat(0.0), 0)));

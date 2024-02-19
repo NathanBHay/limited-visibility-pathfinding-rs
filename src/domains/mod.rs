@@ -1,9 +1,9 @@
 //! # Domains
 //! Domains that can be used with search algorithms. These domains include:
-//! * BitPackedGrid, a grid map that uses 1 bit per cell
+//! * BitPackedGrid2d, a grid map that uses 1 bit per cell
 //! * HashedGrid, a grid map that uses a hash map to store the map
 //! * AdjacencyList, a graph representation of a map
-//! * SampleGrid, a grid map that uses a hash map to store the map and has a chance of being occupied
+//! * SampleGrid2d, a grid map that uses a hash map to store the map and has a chance of being occupied
 
 #![allow(dead_code)]
 
@@ -11,38 +11,55 @@ use std::{fs::read_to_string, ops::Range};
 
 use crate::{fov::fieldofvision::raycast_matrix, util::matrix::Matrix};
 
-pub mod adjacencylist;
-pub mod bitpackedgrid;
-pub mod edgelist;
+pub mod bitpackedgrids;
 pub mod hashedgrid;
-pub mod samplegrid;
+pub mod samplegrids;
 
 /// Trait that represents a domain that can be used with search algorithms.
 /// A domain is a map of cells where each cell can be traversable or an obstacle.
-pub trait Domain {
+pub trait Domain<N> {
     /// Creates a new map with a given width and height
     fn new(width: usize, height: usize) -> Self;
 
     /// Sets the value of a cell in a map. True if the cell is traversable and 
     /// false if it is an obstacle.
-    fn set_value(&mut self, n: (usize, usize), value: bool);
+    fn set_value(&mut self, n: N, value: bool);
 
     /// Gets the value of a cell in a map. True if the cell is traversable and
     /// false if it is an obstacle.
-    fn get_value(&self, n: (usize, usize)) -> bool;
+    fn get_value(&self, n: N) -> bool;
 
     /// Get shape of the data listed in width, height format.
-    fn shape(&self) -> (usize, usize);
+    fn shape(&self) -> N;
+}
 
-    /// Check if a given coordinate is valid
-    fn bounds_check(&self, n: (usize, usize)) -> bool {
+pub trait Grid2d: Domain<(usize, usize)> {
+    fn bounds_check(&self, (x, y): (usize, usize)) -> bool {
         let (width, height) = self.shape();
-        n.0 < width && n.1 < height
+        x < width && y < height
+    }
+
+    /// Calculate the radius of a given point
+    fn radius_calc(&self, n: (usize, usize), radius: usize) -> ((usize, usize), usize, usize) {
+        let radius = if radius % 2 == 0 { radius + 1 } else { radius};
+        let x_min = n.0.saturating_sub(radius);
+        let y_min = n.1.saturating_sub(radius);
+        let (width, height) = self.shape();
+        let x_max = (n.0 + radius).min(width);
+        let y_max = (n.1 + radius).min(height);
+        ((x_min, y_min), x_max - x_min, y_max - y_min)
+    }
+}
+
+pub trait Grid3d: Domain<(usize, usize, usize)> {
+    fn bounds_check(&self, (x, y, z): (usize, usize, usize)) -> bool {
+        let (width, height, depth) = self.shape();
+        x < width && y < height && z < depth
     }
 }
 
 /// Trait used to create domains from files and strings.
-pub trait DomainCreate: Domain + Sized {
+pub trait GridCreate2d: Grid2d + Sized {
     /// Create a new domain from a string, where . is used to represent traversable space
     /// and all other characters represent terrain.
     fn new_from_string(s: String) -> Self {
@@ -73,7 +90,7 @@ pub trait DomainCreate: Domain + Sized {
 }
 
 /// Trait for Printing Domains
-pub trait DomainPrint: Domain {
+pub trait GridPrint2d: Grid2d {
     /// Prints the cells of the domain where . represents a free cell and @ represents a blocked
     /// cell. This will be printed with the given dimensions.
     fn print_cells_with_dims(&self, height: Range<usize>, width: Range<usize>, path: Option<Vec<(usize, usize)>>) -> String {
@@ -107,22 +124,8 @@ pub trait DomainPrint: Domain {
     }
 }
 
-/// Trait for calculating the radius of a given point
-pub trait RadiusCalc: Domain {
-    /// Calculate the radius of a given point
-    fn radius_calc(&self, n: (usize, usize), radius: usize) -> ((usize, usize), usize, usize) {
-        let radius = if radius % 2 == 0 { radius + 1 } else { radius};
-        let x_min = n.0.saturating_sub(radius);
-        let y_min = n.1.saturating_sub(radius);
-        let (width, height) = self.shape();
-        let x_max = (n.0 + radius).min(width);
-        let y_max = (n.1 + radius).min(height);
-        ((x_min, y_min), x_max - x_min, y_max - y_min)
-    }
-}
-
 /// Trait for computing the visibility within a domain
-pub trait DomainVisibility: Domain {
+pub trait GridVisibility2d: Grid2d {
     /// Get the visibility of a given point
     fn visibility(&self, n: (usize, usize), radius: usize) -> Matrix<bool> {
         raycast_matrix(
@@ -148,6 +151,34 @@ pub fn neighbors((x, y): (usize, usize), diagonal: bool) -> impl Iterator<Item =
             (x.wrapping_sub(1), y.wrapping_add(1)),
             (x.wrapping_add(1), y.wrapping_sub(1)),
             (x.wrapping_sub(1), y.wrapping_sub(1)),
+        ]);
+    }
+    neighbors.into_iter()
+}
+
+pub fn neighbors3d((x, y, z): (usize, usize, usize), diagonal: bool) -> impl Iterator<Item = (usize, usize, usize)> {
+    let mut neighbors = vec![
+        (x.wrapping_add(1), y, z),
+        (x, y.wrapping_add(1), z),
+        (x.wrapping_sub(1), y, z),
+        (x, y.wrapping_sub(1), z),
+        (x, y, z.wrapping_add(1)),
+        (x, y, z.wrapping_sub(1)),
+    ];
+    if diagonal {
+        neighbors.extend(vec![
+            (x.wrapping_add(1), y.wrapping_add(1), z),
+            (x.wrapping_sub(1), y.wrapping_add(1), z),
+            (x.wrapping_add(1), y.wrapping_sub(1), z),
+            (x.wrapping_sub(1), y.wrapping_sub(1), z),
+            (x.wrapping_add(1), y, z.wrapping_add(1)),
+            (x.wrapping_sub(1), y, z.wrapping_add(1)),
+            (x.wrapping_add(1), y, z.wrapping_sub(1)),
+            (x.wrapping_sub(1), y, z.wrapping_sub(1)),
+            (x, y.wrapping_add(1), z.wrapping_add(1)),
+            (x, y.wrapping_sub(1), z.wrapping_add(1)),
+            (x, y.wrapping_add(1), z.wrapping_sub(1)),
+            (x, y.wrapping_sub(1), z.wrapping_sub(1)),
         ]);
     }
     neighbors.into_iter()

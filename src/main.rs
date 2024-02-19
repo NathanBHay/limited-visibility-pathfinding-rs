@@ -1,13 +1,12 @@
 use crate::search::samplestarstats::SampleStarStats;
-use domains::samplegrid::SampleGrid;
-use domains::DomainCreate;
+use domains::samplegrids::samplegrid2d::SampleGrid2d;
+use domains::GridCreate2d;
 use heuristics::distance::manhattan_distance;
 use maps::Problem;
 use search::astar::AStar;
 use search::focalsearch::FocalSearch;
 use search::pathstore::{AccStore, GreedyStore};
 use search::samplestar::{PathStoreT, SampleStar};
-use search::samplestarbaseline::SampleStarBaseline;
 use search::BestSearch;
 use std::sync::Arc;
 use std::time::Instant;
@@ -26,14 +25,14 @@ fn main() {
     // for map in maps::MAP_PACK.into_iter() {
     //     run_sample_star(map, 10, 500);
     // }
-    run_sample_star(maps::FILL, 10, 10);
+    run_sample_star(maps::LAK, 100, 100);
     println!("Time Taken: {}s", now.elapsed().as_secs_f32());
 }
 
 fn run_sample_star(map: Problem, epoch: usize, limit: usize) {
     let (name, file, start, goal) = map;
-    let path_store: PathStoreT = Box::new(AccStore::new_count_store());
-    let no_path_store: PathStoreT = Box::new(GreedyStore::new(Box::new(move |n| {
+    let path_store: PathStoreT<(usize, usize)> = Box::new(AccStore::new_count_store());
+    let no_path_store: PathStoreT<(usize, usize)> = Box::new(GreedyStore::new(Box::new(move |n| {
         manhattan_distance(*n, goal)
     })));
     let search = AStar::new(Arc::new(move |x| manhattan_distance(*x, goal)));
@@ -53,7 +52,7 @@ fn run_sample_star(map: Problem, epoch: usize, limit: usize) {
         no_path_store,
         init_stats(),
     );
-    let visualiser = Visualiser::new(name, &samplestar.grid, Some(start), Some(goal));
+    let visualiser = Visualiser::new(&format!("out/{}", name), &samplestar.grid, Some(start), Some(goal));
     for i in 1..=limit {
         if samplestar.step() {
             break;
@@ -77,8 +76,8 @@ fn init_grid(
     file: &str,
     (start_x, start_y): (usize, usize),
     (goal_x, goal_y): (usize, usize),
-) -> SampleGrid {
-    let mut grid = SampleGrid::new_from_file(file);
+) -> SampleGrid2d {
+    let mut grid = SampleGrid2d::new_from_file(file);
     grid.blur_samplegrid(&gaussian_kernal(3, 1.0));
     grid.sample_grid[start_x][start_y].state = 1.0; // Just to make sure
     grid.sample_grid[goal_x][goal_y].state = 1.0;
@@ -100,7 +99,7 @@ fn init_update_kernel() -> Matrix<f32> {
 }
 
 /// The statistics to be collected during the search
-fn init_stats() -> SampleStarStats {
+fn init_stats() -> SampleStarStats<(usize, usize)> {
     SampleStarStats::new(
         vec![
             (

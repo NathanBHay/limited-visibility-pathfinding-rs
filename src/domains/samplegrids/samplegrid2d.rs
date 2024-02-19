@@ -1,23 +1,23 @@
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 use ordered_float::OrderedFloat;
-use rand::Rng;
 
-use super::bitpackedgrid::BitPackedGrid;
-use super::{Domain, DomainCreate, DomainPrint, DomainVisibility, RadiusCalc};
+use super::super::bitpackedgrids::bitpackedgrid2d::BitPackedGrid2d;
+use super::super::{Domain, Grid2d, GridCreate2d, GridPrint2d, GridVisibility2d};
+use crate::domains::neighbors;
 use crate::matrix;
 use crate::util::filter::KalmanNode;
 use crate::util::matrix::{convolve2d, matrix_overlay, ConvResolve, Matrix};
 
 /// A grid that allows for the sampling of cells. It uses a series of Kalman filters for updates
 /// to the individual cells.
-pub struct SampleGrid {
+pub struct SampleGrid2d {
     /// The sampling grid which determines the probability of a cell being occupied.
     /// It has a value between 0.0 and 1.0
     pub sample_grid: Matrix<KalmanNode>,
 
     /// The real values of the grid
-    pub ground_truth: BitPackedGrid,
+    pub ground_truth: BitPackedGrid2d,
 
     // The width and height of the grid
     // can be removed for reduced space
@@ -25,12 +25,12 @@ pub struct SampleGrid {
     pub height: usize,
 }
 
-impl Domain for SampleGrid {
+impl Domain<(usize, usize)> for SampleGrid2d {
     fn new(width: usize, height: usize) -> Self {
         let node = KalmanNode::default();
-        SampleGrid {
+        SampleGrid2d {
             sample_grid: matrix![node; height, width],
-            ground_truth: BitPackedGrid::new(width, height),
+            ground_truth: BitPackedGrid2d::new(width, height),
             width,
             height,
         }
@@ -52,19 +52,20 @@ impl Domain for SampleGrid {
     }
 }
 
-impl DomainCreate for SampleGrid {}
 
-impl DomainPrint for SampleGrid {}
+impl Grid2d for SampleGrid2d {}
 
-impl RadiusCalc for SampleGrid {}
+impl GridCreate2d for SampleGrid2d {}
 
-impl DomainVisibility for SampleGrid {}
+impl GridPrint2d for SampleGrid2d {}
 
-impl SampleGrid {
+impl GridVisibility2d for SampleGrid2d {}
+
+impl SampleGrid2d {
     const NEAREST_THRESHOLD: f32 = 0.5;
 
     /// Creates a new sampling grid from a sampling grid and a ground truth grid
-    pub fn new_from_grid(grid: Matrix<f32>, ground_truth: BitPackedGrid) -> Self {
+    pub fn new_from_grid(grid: Matrix<f32>, ground_truth: BitPackedGrid2d) -> Self {
         let (width, height) = grid.shape();
         let mut sample_grid = matrix![KalmanNode::default(); height, width];
         for y in 0..width {
@@ -73,7 +74,7 @@ impl SampleGrid {
                 sample_grid[x][y].state = grid[x][y];
             }
         }
-        SampleGrid {
+        SampleGrid2d {
             sample_grid,
             ground_truth,
             width,
@@ -85,7 +86,7 @@ impl SampleGrid {
     /// 0.0 indicates a guaranteed obstacles and (0,1) indicates a probability
     pub fn init_gridmap_area<'a>(
         &self,
-        gridmap: &'a mut BitPackedGrid,
+        gridmap: &'a mut BitPackedGrid2d,
         (x, y): (usize, usize),
         width: usize,
         height: usize,
@@ -100,7 +101,7 @@ impl SampleGrid {
     /// Initializes the gridmap from the sampling grid
     pub fn init_gridmap_radius<'a>(
         &mut self,
-        gridmap: &'a mut BitPackedGrid,
+        gridmap: &'a mut BitPackedGrid2d,
         (x, y): (usize, usize),
         radius: usize,
     ) {
@@ -109,7 +110,7 @@ impl SampleGrid {
     }
 
     /// Initializes the gridmap from the sampling grid
-    pub fn init_gridmap<'a>(&mut self, gridmap: &'a mut BitPackedGrid) {
+    pub fn init_gridmap<'a>(&mut self, gridmap: &'a mut BitPackedGrid2d) {
         self.init_gridmap_area(gridmap, (0, 0), self.width, self.height);
     }
 
@@ -130,12 +131,12 @@ impl SampleGrid {
     }
 
     /// Samples a cell with a given chance
-    pub fn sample<'a>(&self, gridmap: &'a mut BitPackedGrid, (x, y): (usize, usize)) -> bool {
+    pub fn sample<'a>(&self, gridmap: &'a mut BitPackedGrid2d, (x, y): (usize, usize)) -> bool {
         self.sample_cached(gridmap, &mut SmallRng::from_entropy(), (x, y))
     }
 
     /// Samples a cell with a given chance caching the random number generator
-    pub fn sample_cached<'a>(&self, gridmap: &'a mut BitPackedGrid, rng: &mut SmallRng, (x, y): (usize, usize)) -> bool {
+    pub fn sample_cached<'a>(&self, gridmap: &'a mut BitPackedGrid2d, rng: &mut SmallRng, (x, y): (usize, usize)) -> bool {
         let value = self.sample_grid[x][y].state != 0.0
             && rng.gen::<f32>() < self.sample_grid[x][y].state;
         gridmap.set_value((x, y), value);
@@ -145,7 +146,7 @@ impl SampleGrid {
     /// Samples an area of the grid
     pub fn sample_area<'a>(
         &self,
-        gridmap: &'a mut BitPackedGrid,
+        gridmap: &'a mut BitPackedGrid2d,
         (x, y): (usize, usize),
         width: usize,
         height: usize,
@@ -161,7 +162,7 @@ impl SampleGrid {
     /// Samples a cell with a given chance
     pub fn sample_radius<'a>(
         &self,
-        gridmap: &'a mut BitPackedGrid,
+        gridmap: &'a mut BitPackedGrid2d,
         (x, y): (usize, usize),
         radius: usize,
     ) {
@@ -170,7 +171,7 @@ impl SampleGrid {
     }
 
     /// Samples all cells in the grid
-    pub fn sample_all<'a>(&self, gridmap: &'a mut BitPackedGrid) {
+    pub fn sample_all<'a>(&self, gridmap: &'a mut BitPackedGrid2d) {
         self.sample_area(gridmap, (0, 0), self.width, self.height)
     }
 
@@ -178,8 +179,8 @@ impl SampleGrid {
     /// wants to use the memory of previously sampled grids to sample new grids.
     pub fn sample_based_on_grid<'a>(
         &self,
-        gridmap: &'a mut BitPackedGrid,
-        sampled_before: &BitPackedGrid,
+        gridmap: &'a mut BitPackedGrid2d,
+        sampled_before: &BitPackedGrid2d,
     ) {
         let mut rng = SmallRng::from_entropy();
         for x in 0..self.width {
@@ -235,7 +236,7 @@ impl SampleGrid {
 
     /// Updates nodes based on visibile nodes
     pub fn raycast_update(&mut self, (x, y): (usize, usize), kernel: &Matrix<f32>) {
-        let mut kernel = SampleGrid::adjacency_kernel(kernel);
+        let mut kernel = SampleGrid2d::adjacency_kernel(kernel);
         let visible = self.visibility((x, y), kernel.width / 2);
         for (k, v) in kernel.data.iter_mut().zip(visible.data.iter()) {
             if !*v {
@@ -247,7 +248,7 @@ impl SampleGrid {
 
     /// Get all adjacenct cells on sampling grid
     pub fn adjacent(&self, (x, y): (usize, usize), diagonal: bool) -> Vec<(usize, usize)> {
-        super::neighbors((x, y), diagonal)
+        neighbors((x, y), diagonal)
             .filter(|(x, y)| self.bounds_check((*x, *y)))
             .collect()
     }
@@ -271,12 +272,12 @@ impl SampleGrid {
     /// Samples all adjacent cells on sampling grid
     pub fn sample_adjacenct<'a>(
         &self,
-        gridmap: &'a mut BitPackedGrid,
-        sampled_before: &'a mut BitPackedGrid,
+        gridmap: &'a mut BitPackedGrid2d,
+        sampled_before: &'a mut BitPackedGrid2d,
         rng: &mut SmallRng,
         (x, y): (usize, usize),
     ) -> Vec<((usize, usize), usize)> {
-        super::neighbors((x, y), false)
+        neighbors((x, y), false)
             .filter(move |(x, y)| {
                 if self.bounds_check((*x, *y)) && !sampled_before.get_value((*x, *y)) {
                     sampled_before.set_value((*x, *y), true);
@@ -294,17 +295,17 @@ impl SampleGrid {
 mod tests {
     use crate::{
         domains::{
-            bitpackedgrid::BitPackedGrid, Domain, DomainCreate, DomainPrint, DomainVisibility,
+            bitpackedgrids::bitpackedgrid2d::BitPackedGrid2d, Domain, GridCreate2d, GridPrint2d, GridVisibility2d,
         },
         matrix,
         util::matrix::{gaussian_kernal, Matrix},
     };
 
-    use super::SampleGrid;
+    use super::SampleGrid2d;
 
     #[test]
     fn test_samplegrid_new() {
-        let grid = SampleGrid::new(128, 128);
+        let grid = SampleGrid2d::new(128, 128);
         assert_eq!(grid.height, 128);
         assert_eq!(grid.width, 128);
         assert_eq!(grid.sample_grid.height, 128);
@@ -314,7 +315,7 @@ mod tests {
     #[test]
     fn test_samplegrid_new_from_grid() {
         let grid =
-            SampleGrid::new_from_grid(matrix![[0.0, 1.0], [1.0, 0.0]], BitPackedGrid::new(2, 2));
+            SampleGrid2d::new_from_grid(matrix![[0.0, 1.0], [1.0, 0.0]], BitPackedGrid2d::new(2, 2));
         assert_eq!(grid.sample_grid[0][0].state, 0.0);
         assert_eq!(grid.sample_grid[1][0].state, 1.0);
     }
@@ -322,7 +323,7 @@ mod tests {
     #[test]
     fn test_samplegrid_new_from_string() {
         let map_str = ".....\n@@.@.\n.@.@.\n.@.@.\n.....\n....@\n";
-        let grid = SampleGrid::new_from_string(map_str.to_string());
+        let grid = SampleGrid2d::new_from_string(map_str.to_string());
         assert_eq!(grid.print_cells(None), map_str);
         assert_eq!(grid.ground_truth.print_cells(None), map_str);
         assert_eq!(grid.sample_grid[0][0].state, 1.0);
@@ -332,8 +333,8 @@ mod tests {
 
     #[test]
     fn test_gridmap_init() {
-        let mut grid = SampleGrid::new_from_string("@....\n.....\n.....\n.....\n".to_string());
-        let mut gridmap = BitPackedGrid::new(grid.width, grid.height);
+        let mut grid = SampleGrid2d::new_from_string("@....\n.....\n.....\n.....\n".to_string());
+        let mut gridmap = BitPackedGrid2d::new(grid.width, grid.height);
         grid.init_gridmap_radius(&mut gridmap, (0, 0), 2);
         assert_eq!(
             grid.ground_truth.print_cells(None),
@@ -345,7 +346,7 @@ mod tests {
     #[test]
     fn test_blur() {
         let mut grid =
-            SampleGrid::new_from_string("@....\n@@...\n@@@..\n@@@..\n@@...\n".to_string());
+            SampleGrid2d::new_from_string("@....\n@@...\n@@@..\n@@@..\n@@...\n".to_string());
         grid.blur_samplegrid(&gaussian_kernal(3, 1.0));
         let grid_sample: Vec<f32> = grid.sample_grid.data.iter().map(|x| x.state).collect();
         assert_eq!(
@@ -360,11 +361,11 @@ mod tests {
 
     #[test]
     fn test_sample() {
-        let mut grid = SampleGrid::new(8, 8);
+        let mut grid = SampleGrid2d::new(8, 8);
         grid.sample_grid[0][0].state = 1.0;
         grid.sample_grid[2][4].state = 1.0;
         grid.sample_grid[1][6].state = 1.0;
-        let mut gridmap = BitPackedGrid::new(grid.width, grid.height);
+        let mut gridmap = BitPackedGrid2d::new(grid.width, grid.height);
         grid.sample(&mut gridmap, (0, 0));
         assert_eq!(gridmap.get_value((0, 0)), true);
         grid.sample_all(&mut gridmap);
@@ -373,7 +374,7 @@ mod tests {
 
     #[test]
     fn test_adjacency_kernel() {
-        let kernel = SampleGrid::adjacency_kernel(&matrix![1.0; 3]);
+        let kernel = SampleGrid2d::adjacency_kernel(&matrix![1.0; 3]);
         assert_eq!(
             kernel,
             matrix![
@@ -386,7 +387,7 @@ mod tests {
 
     #[test]
     fn test_grid_visibility() {
-        let grid = SampleGrid::new_from_string("\n@@@.\n@...\n@.@.\n".to_string());
+        let grid = SampleGrid2d::new_from_string("\n@@@.\n@...\n@.@.\n".to_string());
         let visiblility = grid.visibility((1, 1), 2);
         assert_eq!(
             visiblility,
@@ -402,7 +403,7 @@ mod tests {
 
     #[test]
     fn test_raycast_update() {
-        let mut grid = SampleGrid::new_from_string(".@..\n.@.@\n.@.@\n".to_string());
+        let mut grid = SampleGrid2d::new_from_string(".@..\n.@.@\n.@.@\n".to_string());
         for n in grid.sample_grid.data.iter_mut() {
             if n.state == 1.0 {
                 n.state = 0.6;

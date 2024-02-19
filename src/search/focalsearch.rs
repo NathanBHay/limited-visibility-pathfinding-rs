@@ -182,7 +182,7 @@ where
 mod test {
     use std::sync::Arc;
 
-    use crate::{domains::DomainCreate, heuristics::distance::manhattan_distance};
+    use crate::{domains::GridCreate2d, heuristics::distance::manhattan_distance};
 
     use super::*;
     #[test]
@@ -211,7 +211,7 @@ mod test {
     #[test]
     fn test_focal_search_bitpacked_grid() {
         // In this example the focal list == open list at each iteration
-        let grid = crate::domains::bitpackedgrid::BitPackedGrid::new_from_string(
+        let grid = crate::domains::bitpackedgrids::bitpackedgrid2d::BitPackedGrid2d::new_from_string(
             ".....\n.###.\n.#...\n.#.#.\n...#.".to_string(),
         );
         let path = FocalSearch::<(usize, usize), usize>::new(

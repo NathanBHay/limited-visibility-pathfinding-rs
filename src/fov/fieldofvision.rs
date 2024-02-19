@@ -156,7 +156,7 @@ fn lightcast(
 
 #[cfg(test)]
 mod tests {
-    use crate::{domains::{bitpackedgrid::BitPackedGrid, Domain, DomainCreate}, matrix, util::matrix::Matrix};
+    use crate::{domains::{bitpackedgrids::bitpackedgrid2d::BitPackedGrid2d, Domain, Grid2d, GridCreate2d}, matrix, util::matrix::Matrix};
 
     use super::{raycast_matrix, shadowcasting};
 
@@ -179,7 +179,7 @@ mod tests {
 
     #[test]
     fn test_raycast_on_grid() {
-        let grid = BitPackedGrid::new_from_string(
+        let grid = BitPackedGrid2d::new_from_string(
             ".....\n.###.\n.#...\n.#.#.\n...#.".to_string(),
         );
         let visibility = raycast_matrix(

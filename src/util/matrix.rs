@@ -21,22 +21,6 @@ impl<T> Matrix<T> {
     }
 }
 
-impl Matrix<f32> {
-    pub fn round(&self, precision: i32) -> Matrix<f32> {
-        let factor = 10.0_f32.powi(precision);
-        let data = self
-            .data
-            .iter()
-            .map(|x| (x * factor).round() / factor)
-            .collect();
-        Matrix {
-            data,
-            width: self.width,
-            height: self.height,
-        }
-    }
-}
-
 #[macro_export]
 #[allow(unused_assignments)]
 macro_rules! matrix {

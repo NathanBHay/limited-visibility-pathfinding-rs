@@ -1,17 +1,17 @@
-use crate::domains::samplegrid::SampleGrid;
+use crate::domains::samplegrids::samplegrid2d::SampleGrid2d;
 
 use super::samplestar::PathStoreT;
 
-pub struct SampleStarStats {
+pub struct SampleStarStats<N> {
     stat_store: Box<[(String, f32)]>,
-    path_stats: Box<[Box<dyn Fn(&SampleGrid, &(usize, usize)) -> f32 + Send + Sync>]>,
-    step_stats: Box<[Box<dyn Fn(&PathStoreT, &Vec<(usize, usize)>) -> f32 + Send + Sync>]>, 
+    path_stats: Box<[Box<dyn Fn(&SampleGrid2d, &N) -> f32 + Send + Sync>]>,
+    step_stats: Box<[Box<dyn Fn(&PathStoreT<N>, &Vec<(usize, usize)>) -> f32 + Send + Sync>]>, 
 }
 
-impl SampleStarStats {
+impl<N> SampleStarStats<N> {
     pub(crate) fn new(
-        path_stats: Vec<(String, Box<dyn Fn(&SampleGrid, &(usize, usize)) -> f32 + Send + Sync>)>,
-        step_stats: Vec<(String, Box<dyn Fn(&PathStoreT, &Vec<(usize, usize)>) -> f32 + Send + Sync>)>,
+        path_stats: Vec<(String, Box<dyn Fn(&SampleGrid2d, &N) -> f32 + Send + Sync>)>,
+        step_stats: Vec<(String, Box<dyn Fn(&PathStoreT<N>, &Vec<(usize, usize)>) -> f32 + Send + Sync>)>,
     ) -> Self {
         let mut stat_store = vec![
             ("Paths".to_string(), 0.0),
@@ -31,7 +31,7 @@ impl SampleStarStats {
         self.stat_store[index].1 += val;
     }
 
-    pub(crate) fn run_path_stats(&mut self, grid: &SampleGrid, path: &Vec<(usize, usize)>) {
+    pub(crate) fn run_path_stats(&mut self, grid: &SampleGrid2d, path: &Vec<N>) {
         for (i, f) in self.path_stats.iter().enumerate() {
             for node in path {
                 self.stat_store[3 + i].1 += f(grid, node) / path.len() as f32;
@@ -45,7 +45,7 @@ impl SampleStarStats {
         }
     }
 
-    pub(crate) fn run_step_stats(&mut self, path_store: &PathStoreT, adj: &Vec<(usize, usize)>) {
+    pub(crate) fn run_step_stats(&mut self, path_store: &PathStoreT<N>, adj: &Vec<(usize, usize)>) {
         for (i, f) in self.step_stats.iter().enumerate() {
             self.stat_store[3 + self.path_stats.len() + i].1 += f(path_store, adj);
         }

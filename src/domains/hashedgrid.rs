@@ -5,7 +5,7 @@
 
 use ahash::AHashSet;
 
-use super::{neighbors, Domain, DomainCreate, DomainPrint};
+use super::{neighbors, Domain, Grid2d, GridCreate2d, GridPrint2d};
 
 /// A grid map whoch uses a hashset of obstacles to represent obstacles
 /// This is the simplest grid map implementation
@@ -20,7 +20,7 @@ pub struct HashedGrid {
     pub valid_cells: AHashSet<usize>,
 }
 
-impl Domain for HashedGrid {
+impl Domain<(usize, usize)> for HashedGrid {
     /// Creates a new grid map with a given width and height
     fn new(width: usize, height: usize) -> HashedGrid {
         HashedGrid {
@@ -49,9 +49,11 @@ impl Domain for HashedGrid {
     }
 }
 
-impl DomainCreate for HashedGrid {}
+impl Grid2d for HashedGrid {}
 
-impl DomainPrint for HashedGrid {}
+impl GridCreate2d for HashedGrid {}
+
+impl GridPrint2d for HashedGrid {}
 
 impl HashedGrid {
     /// Inverts the grid map
@@ -82,7 +84,7 @@ impl HashedGrid {
 #[cfg(test)]
 mod tests {
 
-    use crate::domains::{Domain, DomainCreate, DomainPrint};
+    use crate::domains::{Domain, GridCreate2d, GridPrint2d};
 
     use super::HashedGrid;
 

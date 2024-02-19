@@ -11,7 +11,7 @@ use rayon::prelude::*;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use crate::{
-    domains::{bitpackedgrid::BitPackedGrid, samplegrid::SampleGrid, Domain},
+    domains::{bitpackedgrids::bitpackedgrid2d::BitPackedGrid2d, samplegrids::samplegrid2d::SampleGrid2d, Domain, Grid2d},
     util::matrix::Matrix,
 };
 
@@ -33,7 +33,7 @@ use super::{
 /// algorithm however it could be moved out. This is due to the fact search results
 /// aren't stored so stats are calculated on the fly.
 pub struct SampleStarBaseline<S: BestSearch<(usize, usize), usize> + Sync> {
-    pub grid: SampleGrid,
+    pub grid: SampleGrid2d,
     search: S,
     pub previous: (usize, usize),
     pub current: (usize, usize),
@@ -41,24 +41,24 @@ pub struct SampleStarBaseline<S: BestSearch<(usize, usize), usize> + Sync> {
     epoch: usize,
     kernel: Matrix<f32>,
     pub final_path: Vec<(usize, usize)>,
-    path_store: Arc<Mutex<PathStoreT>>,
-    no_path_store: Arc<Mutex<PathStoreT>>,
-    pub stats: Arc<Mutex<SampleStarStats>>,
-    pub sampled_before: BitPackedGrid,
+    path_store: Arc<Mutex<PathStoreT<(usize, usize)>>>,
+    no_path_store: Arc<Mutex<PathStoreT<(usize, usize)>>>,
+    pub stats: Arc<Mutex<SampleStarStats<(usize, usize)>>>,
+    pub sampled_before: BitPackedGrid2d,
 }
 
 impl<S: BestSearch<(usize, usize), usize> + Sync> SampleStarBaseline<S> {
     /// Creates a new SampleStar algorithm
     pub fn new(
-        grid: SampleGrid,
+        grid: SampleGrid2d,
         search: S,
         start: (usize, usize),
         goal: (usize, usize),
         epoch: usize,
         kernel: Matrix<f32>,
-        path_store: PathStoreT,
-        no_path_store: PathStoreT,
-        stats: SampleStarStats,
+        path_store: PathStoreT<(usize, usize)>,
+        no_path_store: PathStoreT<(usize, usize)>,
+        stats: SampleStarStats<(usize, usize)>,
     ) -> Self {
         assert!(grid.bounds_check(start) && grid.bounds_check(goal));
         let (width, height) = grid.shape();
@@ -74,7 +74,7 @@ impl<S: BestSearch<(usize, usize), usize> + Sync> SampleStarBaseline<S> {
             path_store: Arc::new(Mutex::new(path_store)),
             no_path_store: Arc::new(Mutex::new(no_path_store)),
             stats: Arc::new(Mutex::new(stats)),
-            sampled_before: BitPackedGrid::new(width, height),
+            sampled_before: BitPackedGrid2d::new(width, height),
         }
     }
 
@@ -92,7 +92,7 @@ impl<S: BestSearch<(usize, usize), usize> + Sync> SampleStarBaseline<S> {
         // as path_store.len() is unneccesary.
         let valid_paths = Arc::new(Mutex::new(0));
         (0..self.epoch).into_par_iter().for_each(|_| {
-            let mut gridmap = BitPackedGrid::new(self.grid.width, self.grid.height);
+            let mut gridmap = BitPackedGrid2d::new(self.grid.width, self.grid.height);
             gridmap.invert();
             self.grid.sample_based_on_grid(&mut gridmap, &self.sampled_before);
             let (path, weight) = self.search.best_search(
