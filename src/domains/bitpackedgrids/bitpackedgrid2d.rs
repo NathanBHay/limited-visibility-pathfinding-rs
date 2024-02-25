@@ -14,7 +14,7 @@ use std::vec;
 
 use crate::util::matrix::matrix_overlay;
 
-use super::super::{neighbors, samplegrids::samplegrid2d::SampleGrid2d, Domain, Grid2d, GridCreate2d, GridPrint2d, GridVisibility2d};
+use super::{super::{neighbors, samplegrids::samplegrid2d::SampleGrid2d, Domain, Grid2d, GridCreate2d, GridPrint2d, GridVisibility2d}, BitPackedGrid};
 
 /// A grid of bits packed into usize-bit words
 #[derive(Clone, Debug)]
@@ -25,34 +25,33 @@ pub struct BitPackedGrid2d {
     map_height: usize,
     /// The width of the map including padding
     map_width: usize,
-    /// The width of the map in words
-    map_width_in_words: usize,
     map_cells: Box<[usize]>,
 }
 
-impl Domain<(usize, usize)> for BitPackedGrid2d {
+impl Domain for BitPackedGrid2d {
+    type Node = (usize, usize);
+
     /// Creates a new grid map with a given width and height
-    fn new(width: usize, height: usize) -> BitPackedGrid2d {
-        let map_width_in_words = (width >> BitPackedGrid2d::LOG2_BITS_PER_WORD) + 1;
-        let map_width = map_width_in_words << BitPackedGrid2d::LOG2_BITS_PER_WORD;
-        let map_height = height + 2 * BitPackedGrid2d::PADDING;
-        let map_size = (map_width * map_height) >> BitPackedGrid2d::LOG2_BITS_PER_WORD;
+    fn new((width, height): Self::Node) -> BitPackedGrid2d {
+        let map_width_in_words = (width >> super::LOG2_BITS_PER_WORD) + 1;
+        let map_width = map_width_in_words << super::LOG2_BITS_PER_WORD;
+        let map_height = height + 2 * super::PADDING;
+        let map_size = (map_width * map_height) >> super::LOG2_BITS_PER_WORD;
         let map_cells: Box<[usize]> = vec![0; map_size as usize].into_boxed_slice();
         BitPackedGrid2d {
             height,
             width,
             map_height,
             map_width,
-            map_width_in_words,
             map_cells,
         }
     }
 
     /// Set the value if a but at a given x, y coordinate to be true or false
-    fn set_value(&mut self, (x, y): (usize, usize), value: bool) {
+    fn set_value(&mut self, (x, y): Self::Node, value: bool) {
         let map_id = self.get_map_id((x, y));
-        let word_index = map_id >> BitPackedGrid2d::LOG2_BITS_PER_WORD;
-        let mask = 1 << (map_id & BitPackedGrid2d::INDEX_MASK);
+        let word_index = map_id >> super::LOG2_BITS_PER_WORD;
+        let mask = 1 << (map_id & super::INDEX_MASK);
         if value {
             self.map_cells[word_index as usize] |= mask;
         } else {
@@ -61,15 +60,23 @@ impl Domain<(usize, usize)> for BitPackedGrid2d {
     }
 
     /// Get the value of a bit at a given x, y coordinate
-    fn get_value(&self, (x, y): (usize, usize)) -> bool {
+    fn get_value(&self, (x, y): Self::Node) -> bool {
         let map_id = self.get_map_id((x, y));
-        let word_index = map_id >> BitPackedGrid2d::LOG2_BITS_PER_WORD;
-        let mask = 1 << (map_id & BitPackedGrid2d::INDEX_MASK);
+        let word_index = map_id >> super::LOG2_BITS_PER_WORD;
+        let mask = 1 << (map_id & super::INDEX_MASK);
         (self.map_cells[word_index as usize] & mask) != 0
     }
 
-    fn shape(&self) -> (usize, usize) {
+    fn shape(&self) -> Self::Node {
         (self.width, self.height)
+    }
+    
+    fn adjacent(
+        &self,
+        (x, y): (usize, usize),
+        diagonal: bool,
+    ) -> impl Iterator<Item = (usize, usize)> + '_ {
+        neighbors((x, y), diagonal).filter(move |(x, y)| self.get_value((*x, *y)))
     }
 }
 
@@ -81,44 +88,37 @@ impl GridPrint2d for BitPackedGrid2d {}
 
 impl GridVisibility2d for BitPackedGrid2d {}
 
-impl BitPackedGrid2d {
-    const PADDING: usize = 2;
-    const BITS_PER_WORD: usize = usize::BITS as usize;
-    const LOG2_BITS_PER_WORD: usize = usize::BITS.trailing_zeros() as usize;
-    const INDEX_MASK: usize = BitPackedGrid2d::BITS_PER_WORD - 1;
-
-    /// Convert x, y to map id
-    /// ## Arguments
-    /// * `(x, y)` - The coordinates of the cell [0, original width)
-    /// ## Returns
-    /// The map id of the cell
-    fn get_map_id(&self, (x, y): (usize, usize)) -> usize {
-        self.map_width * y.wrapping_add(BitPackedGrid2d::PADDING)
-            + x.wrapping_add(BitPackedGrid2d::PADDING)
+impl BitPackedGrid for BitPackedGrid2d {
+    type Node = (usize, usize);
+    
+    fn get_map_id(&self, (x, y): Self::Node) -> usize {
+        self.map_width * y.wrapping_add(super::PADDING)
+            + x.wrapping_add(super::PADDING)
     }
 
-    /// Convert map id to x, y
-    fn map_id_to_xy(&self, map_id: usize) -> (usize, usize) {
-        let y = map_id / self.height;
-        let x = map_id - y * self.width;
-        (x, y)
-    }
-
-    /// Get the number of 1s in the grid
-    pub fn count_ones(&self) -> usize {
+    fn count_ones(&self) -> usize {
         self.map_cells
             .iter()
             .map(|word| word.count_ones() as usize)
             .sum()
     }
 
-    /// Invert the grid, definetly not the fastest way to do this
-    pub fn invert(&mut self) {
+    fn invert(&mut self) {
         for x in 0..self.width {
             for y in 0..self.height {
                 self.set_value((x, y), !self.get_value((x, y)))
             }
         }
+    }
+}
+
+impl BitPackedGrid2d {
+
+    /// Convert map id to x, y
+    fn map_id_to_xy(&self, map_id: usize) -> (usize, usize) {
+        let y = map_id / self.height;
+        let x = map_id - y * self.width;
+        (x, y)
     }
 
     /// Set Radius based upon a raycast
@@ -130,44 +130,27 @@ impl BitPackedGrid2d {
             }
         }
     }
-
-    /// Get the neighbors of a given cell
-    pub fn adjacent(
-        &self,
-        (x, y): (usize, usize),
-        diagonal: bool,
-    ) -> impl Iterator<Item = (usize, usize)> + '_ {
-        neighbors((x, y), diagonal).filter(move |(x, y)| self.get_value((*x, *y)))
-    }
-
-    pub fn adjacent1(
-        &self,
-        (x, y): (usize, usize),
-    ) -> impl Iterator<Item = ((usize, usize), usize)> + '_ {
-        self.adjacent((x, y), false).map(|n| (n, 1))
-    }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::domains::{Domain, GridCreate2d, GridPrint2d};
+    use crate::domains::{bitpackedgrids::BitPackedGrid, Domain, GridCreate2d, GridPrint2d};
 
     use super::BitPackedGrid2d;
 
     #[test]
     fn test_bitpackedgrid_new() {
-        let grid = BitPackedGrid2d::new(128, 128);
+        let grid = BitPackedGrid2d::new((128, 128));
         assert_eq!(grid.height, 128);
         assert_eq!(grid.width, 128);
         assert_eq!(grid.map_height, 132);
         assert_eq!(grid.map_width, 192);
-        assert_eq!(grid.map_width_in_words, 3);
         assert_eq!(grid.map_cells.len(), 396);
     }
 
     #[test]
     fn test_bitpackedgrid_set_value() {
-        let mut grid = BitPackedGrid2d::new(16, 16);
+        let mut grid = BitPackedGrid2d::new((16, 16));
         grid.set_value((0, 0), true);
         assert_eq!(grid.get_value((0, 0)), true);
         grid.set_value((0, 0), false);

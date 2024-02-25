@@ -11,7 +11,7 @@ use rayon::prelude::*;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use crate::{
-    domains::{bitpackedgrids::bitpackedgrid2d::BitPackedGrid2d, samplegrids::samplegrid2d::SampleGrid2d, Domain, Grid2d},
+    domains::{bitpackedgrids::{bitpackedgrid2d::BitPackedGrid2d, BitPackedGrid}, samplegrids::samplegrid2d::SampleGrid2d, Domain, Grid2d},
     util::matrix::Matrix,
 };
 
@@ -74,7 +74,7 @@ impl<S: BestSearch<(usize, usize), usize> + Sync> SampleStarBaseline<S> {
             path_store: Arc::new(Mutex::new(path_store)),
             no_path_store: Arc::new(Mutex::new(no_path_store)),
             stats: Arc::new(Mutex::new(stats)),
-            sampled_before: BitPackedGrid2d::new(width, height),
+            sampled_before: BitPackedGrid2d::new((width, height)),
         }
     }
 
@@ -92,11 +92,11 @@ impl<S: BestSearch<(usize, usize), usize> + Sync> SampleStarBaseline<S> {
         // as path_store.len() is unneccesary.
         let valid_paths = Arc::new(Mutex::new(0));
         (0..self.epoch).into_par_iter().for_each(|_| {
-            let mut gridmap = BitPackedGrid2d::new(self.grid.width, self.grid.height);
+            let mut gridmap = BitPackedGrid2d::new((self.grid.width, self.grid.height));
             gridmap.invert();
             self.grid.sample_based_on_grid(&mut gridmap, &self.sampled_before);
             let (path, weight) = self.search.best_search(
-                |n| gridmap.adjacent1(*n).collect::<Vec<_>>(),
+                |n| gridmap.adjacent(*n, false).map(|n| (n, 1)).collect::<Vec<_>>(),
                 self.current,
                 |n| !self.sampled_before.get_value(*n) || *n == self.goal,
             );
@@ -123,7 +123,7 @@ impl<S: BestSearch<(usize, usize), usize> + Sync> SampleStarBaseline<S> {
             }
         });
         self.previous = self.current;
-        let adj = self.grid.adjacent(self.current, false);
+        let adj = self.grid.adjacent(self.current, false).collect();
         let valid_paths = valid_paths.lock().unwrap();
         let path_store = if *valid_paths > 0 {
             self.path_store.lock().unwrap()

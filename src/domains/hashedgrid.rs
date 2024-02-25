@@ -20,9 +20,11 @@ pub struct HashedGrid {
     pub valid_cells: AHashSet<usize>,
 }
 
-impl Domain<(usize, usize)> for HashedGrid {
+impl Domain for HashedGrid {
+    type Node = (usize, usize);
+
     /// Creates a new grid map with a given width and height
-    fn new(width: usize, height: usize) -> HashedGrid {
+    fn new((width, height): Self::Node) -> HashedGrid {
         HashedGrid {
             width,
             height,
@@ -32,7 +34,7 @@ impl Domain<(usize, usize)> for HashedGrid {
 
     /// Sets the value of a cell in a map. True if the cell is traversable and 
     /// false if it is an obstacle.
-    fn set_value(&mut self, (x, y): (usize, usize), value: bool) {
+    fn set_value(&mut self, (x, y): Self::Node, value: bool) {
         if value {
             self.valid_cells.insert(x + y * self.width);
         } else {
@@ -40,12 +42,20 @@ impl Domain<(usize, usize)> for HashedGrid {
         }
     }
 
-    fn get_value(&self, (x, y): (usize, usize)) -> bool {
+    fn get_value(&self, (x, y): Self::Node) -> bool {
         self.valid_cells.contains(&(x + y * self.width))
     }
 
-    fn shape(&self) -> (usize, usize) {
+    fn shape(&self) -> Self::Node {
         (self.width, self.height)
+    }
+
+    fn adjacent(
+        &self,
+        (x, y): Self::Node,
+        diagonal: bool,
+    ) -> impl Iterator<Item = (usize, usize)> + '_ {
+        neighbors((x, y), diagonal).filter(move |(x, y)| self.valid_map_value((*x, *y)))
     }
 }
 
@@ -69,16 +79,6 @@ impl HashedGrid {
     pub fn valid_map_value(&self, (x, y): (usize, usize)) -> bool {
         self.bounds_check((x, y)) && self.get_value((x, y))
     }
-
-    /// Gets the neighbors of a given coordinate
-    pub fn adjacent(
-        &self,
-        x: usize,
-        y: usize,
-        diagonal: bool,
-    ) -> impl Iterator<Item = (usize, usize)> + '_ {
-        neighbors((x, y), diagonal).filter(move |(x, y)| self.valid_map_value((*x, *y)))
-    }
 }
 
 #[cfg(test)]
@@ -90,7 +90,7 @@ mod tests {
 
     #[test]
     fn test_grid_add_obstacle() {
-        let mut grid = HashedGrid::new(5, 5);
+        let mut grid = HashedGrid::new((5, 5));
         grid.set_value((0, 0), false);
         grid.set_value((2, 3), false);
         assert_eq!(grid.get_value((0, 0)), false);
@@ -114,7 +114,7 @@ mod tests {
     #[test]
     fn test_grid_adjacent() {
         let grid = HashedGrid::new_from_string(String::from("...\n@.@\n@.@"));
-        let neighbors = grid.adjacent(2, 1, true).collect::<Vec<_>>();
+        let neighbors = grid.adjacent((2, 1), true).collect::<Vec<_>>();
         assert_eq!(neighbors, vec![(1, 1), (2, 0), (1, 2), (1, 0)]);
     }
 }

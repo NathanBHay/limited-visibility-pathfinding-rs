@@ -101,7 +101,7 @@ where
 mod tests {
     use super::AStar;
     use crate::{
-        domains::{bitpackedgrids::bitpackedgrid2d::BitPackedGrid2d, GridCreate2d},
+        domains::{bitpackedgrids::bitpackedgrid2d::BitPackedGrid2d, Domain, GridCreate2d},
         search::Search,
     };
     use std::sync::Arc;

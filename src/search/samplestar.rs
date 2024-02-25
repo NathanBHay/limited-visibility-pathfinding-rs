@@ -12,7 +12,7 @@ use rayon::prelude::*;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use crate::{
-    domains::{bitpackedgrids::bitpackedgrid2d::BitPackedGrid2d, samplegrids::samplegrid2d::SampleGrid2d, Domain, Grid2d},
+    domains::{bitpackedgrids::{bitpackedgrid2d::BitPackedGrid2d, BitPackedGrid}, samplegrids::samplegrid2d::SampleGrid2d, Domain, Grid2d},
     heuristics::probability::compute_probability,
     util::{filter::KalmanNode, matrix::Matrix},
 };
@@ -100,7 +100,7 @@ where
         // as path_store.len() is unneccesary.
         let valid_paths = Arc::new(Mutex::new(0));
         (0..self.epoch).into_par_iter().for_each(|_| {
-            let mut gridmap = BitPackedGrid2d::new(self.grid.width, self.grid.height);
+            let mut gridmap = BitPackedGrid2d::new((self.grid.width, self.grid.height));
             let mut sampled_before = gridmap.clone();
             let mut rng = rand::rngs::SmallRng::from_entropy(); // Incrementally improves performance
             let (path, weight) = self.search.best_search(
@@ -134,7 +134,7 @@ where
             }
         });
         self.previous = self.current;
-        let adj = self.grid.adjacent(self.current, false);
+        let adj = self.grid.adjacent(self.current, false).collect();
         let valid_paths = valid_paths.lock().unwrap();
         let path_store = if *valid_paths > 0 {
             self.path_store.lock().unwrap()

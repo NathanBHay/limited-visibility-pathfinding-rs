@@ -17,30 +17,34 @@ pub mod samplegrids;
 
 /// Trait that represents a domain that can be used with search algorithms.
 /// A domain is a map of cells where each cell can be traversable or an obstacle.
-pub trait Domain<N> {
+pub trait Domain {
+    type Node;
     /// Creates a new map with a given width and height
-    fn new(width: usize, height: usize) -> Self;
+    fn new(dims: Self::Node) -> Self;
 
     /// Sets the value of a cell in a map. True if the cell is traversable and 
     /// false if it is an obstacle.
-    fn set_value(&mut self, n: N, value: bool);
+    fn set_value(&mut self, n: Self::Node, value: bool);
 
     /// Gets the value of a cell in a map. True if the cell is traversable and
     /// false if it is an obstacle.
-    fn get_value(&self, n: N) -> bool;
+    fn get_value(&self, n: Self::Node) -> bool;
 
     /// Get shape of the data listed in width, height format.
-    fn shape(&self) -> N;
+    fn shape(&self) -> Self::Node;
+
+    /// Get the neighbors of a given cell
+    fn adjacent(&self, n: Self::Node, diagonal: bool) -> impl Iterator<Item = Self::Node>;
 }
 
-pub trait Grid2d: Domain<(usize, usize)> {
-    fn bounds_check(&self, (x, y): (usize, usize)) -> bool {
+pub trait Grid2d: Domain<Node = (usize, usize)> {
+    fn bounds_check(&self, (x, y): Self::Node) -> bool {
         let (width, height) = self.shape();
         x < width && y < height
     }
 
     /// Calculate the radius of a given point
-    fn radius_calc(&self, n: (usize, usize), radius: usize) -> ((usize, usize), usize, usize) {
+    fn radius_calc(&self, n: Self::Node, radius: usize) -> (Self::Node, usize, usize) {
         let radius = if radius % 2 == 0 { radius + 1 } else { radius};
         let x_min = n.0.saturating_sub(radius);
         let y_min = n.1.saturating_sub(radius);
@@ -51,7 +55,7 @@ pub trait Grid2d: Domain<(usize, usize)> {
     }
 }
 
-pub trait Grid3d: Domain<(usize, usize, usize)> {
+pub trait Grid3d: Domain<Node = (usize, usize, usize)> {
     fn bounds_check(&self, (x, y, z): (usize, usize, usize)) -> bool {
         let (width, height, depth) = self.shape();
         x < width && y < height && z < depth
@@ -71,7 +75,7 @@ pub trait GridCreate2d: Grid2d + Sized {
         };
         let height = s.lines().count();
         let width = s.lines().next().map(|x| x.len()).unwrap();
-        let mut domain = Self::new(width, height);
+        let mut domain = Self::new((width, height));
         for (i, line) in s.lines().enumerate() {
             for (j, c) in line.chars().enumerate() {
                 if c == '.' {
@@ -93,7 +97,7 @@ pub trait GridCreate2d: Grid2d + Sized {
 pub trait GridPrint2d: Grid2d {
     /// Prints the cells of the domain where . represents a free cell and @ represents a blocked
     /// cell. This will be printed with the given dimensions.
-    fn print_cells_with_dims(&self, height: Range<usize>, width: Range<usize>, path: Option<Vec<(usize, usize)>>) -> String {
+    fn print_cells_with_dims(&self, height: Range<usize>, width: Range<usize>, path: Option<Vec<Self::Node>>) -> String {
         let (grid_width, _) = self.shape();
         let mut s = String::new();
         for y in height.clone() {
@@ -118,7 +122,7 @@ pub trait GridPrint2d: Grid2d {
 
     /// Prints the cells of the domain where . represents a free cell and @ represents a blocked
     /// cell. A path can be printed which is represented as *
-    fn print_cells(&self, path: Option<Vec<(usize, usize)>>) -> String {
+    fn print_cells(&self, path: Option<Vec<Self::Node>>) -> String {
         let (width, height) = self.shape();
         self.print_cells_with_dims(0..height, 0..width, path)
     }
@@ -127,7 +131,7 @@ pub trait GridPrint2d: Grid2d {
 /// Trait for computing the visibility within a domain
 pub trait GridVisibility2d: Grid2d {
     /// Get the visibility of a given point
-    fn visibility(&self, n: (usize, usize), radius: usize) -> Matrix<bool> {
+    fn visibility(&self, n: Self::Node, radius: usize) -> Matrix<bool> {
         raycast_matrix(
             (n.0 as isize, n.1 as isize),
             radius,

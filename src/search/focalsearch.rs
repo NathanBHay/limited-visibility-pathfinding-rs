@@ -182,7 +182,7 @@ where
 mod test {
     use std::sync::Arc;
 
-    use crate::{domains::GridCreate2d, heuristics::distance::manhattan_distance};
+    use crate::{domains::{Domain, GridCreate2d}, heuristics::distance::manhattan_distance};
 
     use super::*;
     #[test]

@@ -230,7 +230,7 @@ mod tests {
 
     use super::*;
     use crate::domains::bitpackedgrids::bitpackedgrid2d::BitPackedGrid2d;
-    use crate::domains::GridCreate2d;
+    use crate::domains::{Domain, GridCreate2d};
     use crate::heuristics::distance::manhattan_distance;
 
     #[test]
