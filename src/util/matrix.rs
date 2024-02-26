@@ -1,4 +1,4 @@
-//! Matrix utilities.
+//! Matrix utilities. 
 
 use std::{
     fmt::{Display, Formatter},
@@ -7,6 +7,8 @@ use std::{
 
 use crate::heuristics::distance::manhattan_distance;
 
+/// A 2D matrix used for image processing like operations. This is used internally
+/// within SampleGrids.
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Matrix<T> {
     pub data: Box<[T]>,

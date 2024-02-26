@@ -1,7 +1,7 @@
-//! Visualiser tool for visualising `Sample Star` algorithm.
-//!
+//! Visualiser tool for visualising `Sample Star` algorithm. This is used to output
+//! the data in JSON which is usable by the python visualiser.
 //! Future optimisation could be to output in BinCode format as it is interpertable by python.
-//! This would allow for faster output of the data. Another approac
+//! This would allow for faster output of the data.
 use ahash::AHashMap;
 use serde_json::json;
 use std::{
@@ -9,7 +9,7 @@ use std::{
     io::{BufWriter, Write},
 };
 
-use crate::domains::{bitpackedgrids::bitpackedgrid2d::BitPackedGrid2d, samplegrids::samplegrid2d::SampleGrid2d, Domain};
+use crate::domains::{bitpackedgrids::bitpackedgrid2d::BitPackedGrid2d, samplegrids::samplegrid2d::SampleGrid2d, GridDomain};
 
 /// Visualiser tool for visualising `Sample Star` algorithm.
 /// Outputs to JSON format for use with the python visualiser.
@@ -18,11 +18,6 @@ pub struct Visualiser {
     start: Option<(usize, usize)>,
     goal: Option<(usize, usize)>,
 }
-
-// TODO: Statistics Store is an expandable store that keeps track of certain stats. It will
-// be a attribute within sample star. It will run every loop and update the stats.
-// The stats method will take in a both bit packed grids and will will run a set
-// of functions on them to get the stats. The stats will be returned as a AHashMap
 
 impl Visualiser {
     /// Create a new visualiser for a `SampleGrid` with a start and goal

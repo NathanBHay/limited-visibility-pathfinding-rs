@@ -1,19 +1,24 @@
-use crate::domains::{neighbors3d, Domain};
+use crate::domains::{neighbors3d, Grid3d, GridDomain};
 
 use super::BitPackedGrid;
 
+/// A 3-dimensional bit-packed grid representation. Based upon the 2d representation,
+/// but with a depth field. It is internally represented as essentially multiple 
+/// 2d grids stacked on top of each other, with the extra padding added.
 pub struct BitPackedGrid3d {
+    // Original Dims
     pub height: usize,
     pub width: usize,
     pub depth: usize,
+    // Dimensions with padding
     map_height: usize,
     map_width: usize,
-    map_area: usize,
     map_depth: usize,
+    map_area: usize, // Kept for performance
     map_cells: Box<[usize]>,
 }
 
-impl Domain for BitPackedGrid3d {
+impl GridDomain for BitPackedGrid3d {
     type Node = (usize, usize, usize);
 
     fn new((width, height, depth): Self::Node) -> Self {
@@ -92,13 +97,17 @@ impl BitPackedGrid for BitPackedGrid3d {
     }
 }
 
+impl Grid3d for BitPackedGrid3d {}
+
 impl BitPackedGrid3d {
-    const YPADDING: usize = super::PADDING - 1;
+    /// The padding for the y axis. This is half the padding of the normal 
+    /// padding as the z axis is pads y twice
+    const YPADDING: usize = super::PADDING / 2;
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::domains::{bitpackedgrids::BitPackedGrid, Domain};
+    use crate::domains::{bitpackedgrids::BitPackedGrid, GridDomain};
 
     use super::BitPackedGrid3d;
 

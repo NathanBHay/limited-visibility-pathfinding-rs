@@ -49,45 +49,71 @@ impl<N: Clone + Eq + Hash, C: Clone + Ord> FSOpenList<N, C> {
 /// doesn't need to be admissible.
 /// ## Arguments
 /// * `heuristic` - A function that returns the heuristic value of a given node
+/// * `best_heuristic` - A function that returns the best heuristic value of a given node
 /// * `focal_heuristic` - A function tha evaluates nodes within a range of
 /// (0, epsilon] of the best node on the open list
 /// * ``focal_calc`` - A function that calculates epsilon combined with a cost
 /// to find whether a node is within the focal range. Focal calc should produce
 /// a value where focal_calc(f_min) >= f_min
 /// Vaguely based upon: https://www.ijcai.org/proceedings/2018/0199.pdf
-pub struct FocalSearch<N, C>
+pub struct FocalSearch<N, C, D>
 where
     N: Hash + Clone + Eq + Sync,
     C: Ord + Default + Clone + Add<Output = C> + Sync,
+    D: Ord + Default + Clone + Sync,
 {
     heuristic: Arc<dyn Fn(&N) -> C + Sync + Send>,
+    best_heuristic: Arc<dyn Fn(&N) -> D + Sync + Send>,
     focal_heuristic: Arc<dyn Fn(&N) -> C + Sync + Send>,
     focal_calc: Arc<dyn Fn(&C) -> C + Sync + Send>,
 }
 
-impl<N, C> FocalSearch<N, C>
+impl<N, C, D> FocalSearch<N, C, D>
 where
     N: Hash + Clone + Eq + Sync,
     C: Ord + Default + Clone + Add<Output = C> + Sync,
+    D: Ord + Default + Clone + Sync,
 {
     /// Create a new Focal Search
     pub fn new(
         heuristic: Arc<dyn Fn(&N) -> C + Sync + Send>,
+        best_heuristic: Arc<dyn Fn(&N) -> D + Sync + Send>,
         focal_heuristic: Arc<dyn Fn(&N) -> C + Sync + Send>,
         focal_calc: Arc<dyn Fn(&C) -> C + Sync + Send>,
     ) -> Self {
         FocalSearch {
             heuristic,
+            best_heuristic,
             focal_heuristic,
             focal_calc,
         }
     }
 }
 
-impl<N, C> Search<N, C> for FocalSearch<N, C>
+impl<N, C> FocalSearch<N, C, bool>
 where
     N: Hash + Clone + Eq + Sync,
     C: Ord + Default + Clone + Add<Output = C> + Sync,
+{
+    pub fn new_basic(
+        heuristic: Arc<dyn Fn(&N) -> C + Sync + Send>,
+        focal_heuristic: Arc<dyn Fn(&N) -> C + Sync + Send>,
+        focal_calc: Arc<dyn Fn(&C) -> C + Sync + Send>,
+    ) -> Self {
+        FocalSearch {
+            heuristic,
+            best_heuristic: Arc::new(|_| false),
+            focal_heuristic,
+            focal_calc,
+        }
+    }
+}
+
+impl<N, C, D> Search<N, C> for FocalSearch<N, C, D>
+where
+    N: Hash + Clone + Eq + Sync,
+    C: Ord + Default + Clone + Add<Output = C> + Sync,
+    D: Ord + Default + Clone + Sync,
 {
     fn _search<E, I, G>(
         &self,
@@ -168,13 +194,18 @@ where
     }
 }
 
-impl<N, C> BestSearch<N, C> for FocalSearch<N, C>
+impl<N, C, D> BestSearch<N, C, D> for FocalSearch<N, C, D>
 where
     N: Hash + Clone + Eq + Sync,
     C: Ord + Default + Clone + Add<Output = C> + Sync,
+    D: Ord + Default + Clone + Sync,
 {
-    fn get_best_heuristic(&self) -> &Arc<dyn Fn(&N) -> C + Sync + Send> {
-        &self.heuristic
+    fn get_best_heuristic(&self) -> &Arc<dyn Fn(&N) -> D + Sync + Send> {
+        &self.best_heuristic
+    }
+
+    fn set_best_heuristic(&mut self, heuristic: Arc<dyn Fn(&N) -> D + Sync + Send>) {
+        self.best_heuristic = heuristic;
     }
 }
 
@@ -182,7 +213,7 @@ where
 mod test {
     use std::sync::Arc;
 
-    use crate::{domains::{Domain, GridCreate2d}, heuristics::distance::manhattan_distance};
+    use crate::{domains::{GridDomain, GridCreate2d}, heuristics::distance::manhattan_distance};
 
     use super::*;
     #[test]
@@ -203,8 +234,12 @@ mod test {
 
     #[test]
     fn test_focal_search() {
-        let results = FocalSearch::new(Arc::new(|x| *x), Arc::new(|x| *x), Arc::new(|x| *x))
-            .search(|x| vec![(x + 1, 1), (x + 2, 2)], 0, |x| *x == 2);
+        let results = FocalSearch::new_basic(
+            Arc::new(|x| *x),
+            Arc::new(|x| *x),
+            Arc::new(|x| *x),
+        )
+        .search(|x| vec![(x + 1, 1), (x + 2, 2)], 0, |x| *x == 2);
         assert_eq!(results.unwrap().0, vec![0, 2]);
     }
 
@@ -214,7 +249,7 @@ mod test {
         let grid = crate::domains::bitpackedgrids::bitpackedgrid2d::BitPackedGrid2d::new_from_string(
             ".....\n.###.\n.#...\n.#.#.\n...#.".to_string(),
         );
-        let path = FocalSearch::<(usize, usize), usize>::new(
+        let path = FocalSearch::new_basic(
             Arc::new(|n| manhattan_distance(*n, (4, 4))), // Fix: Dereference the reference to the tuple
             Arc::new(|_| 0),
             Arc::new(|x| *x),

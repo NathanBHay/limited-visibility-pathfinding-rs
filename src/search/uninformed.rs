@@ -1,5 +1,4 @@
-//! A series of uninformed search algorithms
-//! These algorithms include:
+//! A series of uninformed search algorithms, include for completeness. Algorithms include:
 //! * Breadth-First Search
 //! * Depth-First Search
 

@@ -35,9 +35,11 @@ fn run_sample_star(map: Problem, epoch: usize, limit: usize) {
     let no_path_store: PathStoreT<(usize, usize)> = Box::new(GreedyStore::new(Box::new(move |n| {
         manhattan_distance(*n, goal)
     })));
-    let search = AStar::new(Arc::new(move |x| manhattan_distance(*x, goal)));
+    // You can alternate betweeen AStar and FocalSearch
+    let search = AStar::new(Arc::new(move |x| manhattan_distance(*x, goal)), Arc::new(|_| (0, 0)));
     // let search = FocalSearch::new(
     //     Arc::new(move |x| manhattan_distance(*x, goal)),
+    //     Arc::new(|_| (0, 0))
     //     Arc::new(|_| 0),
     //     Arc::new(move |_| 0),
     // );
@@ -57,6 +59,7 @@ fn run_sample_star(map: Problem, epoch: usize, limit: usize) {
         if samplestar.step() {
             break;
         }
+        // Specific visualisations for samplestar baseline that show visiblity
         // visualiser
         //     .visualise_bitpacked_grid(&samplestar.sampled_before, &format!("sampled_before_{}", i));
         visualiser.visualise_iteration(

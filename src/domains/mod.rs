@@ -1,9 +1,8 @@
 //! # Domains
 //! Domains that can be used with search algorithms. These domains include:
-//! * BitPackedGrid2d, a grid map that uses 1 bit per cell
+//! * BitPackedGrid, a grid map that uses 1 bit per cell
 //! * HashedGrid, a grid map that uses a hash map to store the map
-//! * AdjacencyList, a graph representation of a map
-//! * SampleGrid2d, a grid map that uses a hash map to store the map and has a chance of being occupied
+//! * SampleGrid, a grid of probability filters that can be sampled
 
 #![allow(dead_code)]
 
@@ -15,9 +14,9 @@ pub mod bitpackedgrids;
 pub mod hashedgrid;
 pub mod samplegrids;
 
-/// Trait that represents a domain that can be used with search algorithms.
-/// A domain is a map of cells where each cell can be traversable or an obstacle.
-pub trait Domain {
+/// Trait that represents a grid domain that can be used with search algorithms.
+/// This trait allows trait allows subtraits to do repeated operations.
+pub trait GridDomain {
     type Node;
     /// Creates a new map with a given width and height
     fn new(dims: Self::Node) -> Self;
@@ -30,14 +29,16 @@ pub trait Domain {
     /// false if it is an obstacle.
     fn get_value(&self, n: Self::Node) -> bool;
 
-    /// Get shape of the data listed in width, height format.
+    /// Get shape of the data listed in x, y, z, ... format
     fn shape(&self) -> Self::Node;
 
     /// Get the neighbors of a given cell
     fn adjacent(&self, n: Self::Node, diagonal: bool) -> impl Iterator<Item = Self::Node>;
 }
 
-pub trait Grid2d: Domain<Node = (usize, usize)> {
+/// Trait for 2d grid domains
+pub trait Grid2d: GridDomain<Node = (usize, usize)> {
+    /// Check if within 2d bounds
     fn bounds_check(&self, (x, y): Self::Node) -> bool {
         let (width, height) = self.shape();
         x < width && y < height
@@ -55,13 +56,15 @@ pub trait Grid2d: Domain<Node = (usize, usize)> {
     }
 }
 
-pub trait Grid3d: Domain<Node = (usize, usize, usize)> {
+/// Trait for 3d grid domains
+pub trait Grid3d: GridDomain<Node = (usize, usize, usize)> {
+    /// Check if within 3d bounds
     fn bounds_check(&self, (x, y, z): (usize, usize, usize)) -> bool {
         let (width, height, depth) = self.shape();
         x < width && y < height && z < depth
     }
 }
-
+ 
 /// Trait used to create domains from files and strings.
 pub trait GridCreate2d: Grid2d + Sized {
     /// Create a new domain from a string, where . is used to represent traversable space
@@ -160,6 +163,7 @@ pub fn neighbors((x, y): (usize, usize), diagonal: bool) -> impl Iterator<Item =
     neighbors.into_iter()
 }
 
+/// Helper for 3-dimensional neighbours
 pub fn neighbors3d((x, y, z): (usize, usize, usize), diagonal: bool) -> impl Iterator<Item = (usize, usize, usize)> {
     let mut neighbors = vec![
         (x.wrapping_add(1), y, z),

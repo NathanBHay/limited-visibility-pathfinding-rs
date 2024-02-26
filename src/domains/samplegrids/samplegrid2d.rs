@@ -3,7 +3,7 @@ use rand::{Rng, SeedableRng};
 use ordered_float::OrderedFloat;
 
 use super::super::bitpackedgrids::bitpackedgrid2d::BitPackedGrid2d;
-use super::super::{Domain, Grid2d, GridCreate2d, GridPrint2d, GridVisibility2d};
+use super::super::{GridDomain, Grid2d, GridCreate2d, GridPrint2d, GridVisibility2d};
 use crate::domains::neighbors;
 use crate::matrix;
 use crate::util::filter::KalmanNode;
@@ -25,7 +25,7 @@ pub struct SampleGrid2d {
     pub height: usize,
 }
 
-impl Domain for SampleGrid2d {
+impl GridDomain for SampleGrid2d {
     type Node = (usize, usize);
     
     fn new((width, height): Self::Node) -> Self {
@@ -53,7 +53,6 @@ impl Domain for SampleGrid2d {
         (self.width, self.height)
     }
     
-    /// Get all adjacenct cells on sampling grid
     fn adjacent(&self, (x, y): (usize, usize), diagonal: bool) -> impl Iterator<Item = (usize, usize)> + '_{
         neighbors((x, y), diagonal)
             .filter(|(x, y)| self.bounds_check((*x, *y)))
@@ -70,6 +69,7 @@ impl GridPrint2d for SampleGrid2d {}
 impl GridVisibility2d for SampleGrid2d {}
 
 impl SampleGrid2d {
+    /// The threshold for a cell to be considered occupied
     const NEAREST_THRESHOLD: f32 = 0.5;
 
     /// Creates a new sampling grid from a sampling grid and a ground truth grid
@@ -90,8 +90,7 @@ impl SampleGrid2d {
         }
     }
 
-    /// Initializes an area of the bitfield from the sampling grid values, where
-    /// 0.0 indicates a guaranteed obstacles and (0,1) indicates a probability
+    /// Initializes an area of the bitfield where the kalman state is not 0.0
     pub fn init_gridmap_area<'a>(
         &self,
         gridmap: &'a mut BitPackedGrid2d,
@@ -106,7 +105,7 @@ impl SampleGrid2d {
         }
     }
 
-    /// Initializes the gridmap from the sampling grid
+    /// Initializes the gridmap within a radius
     pub fn init_gridmap_radius<'a>(
         &mut self,
         gridmap: &'a mut BitPackedGrid2d,
@@ -117,7 +116,7 @@ impl SampleGrid2d {
         self.init_gridmap_area(gridmap, n, width, height);
     }
 
-    /// Initializes the gridmap from the sampling grid
+    /// Initializes the entire gridmap
     pub fn init_gridmap<'a>(&mut self, gridmap: &'a mut BitPackedGrid2d) {
         self.init_gridmap_area(gridmap, (0, 0), self.width, self.height);
     }
@@ -143,7 +142,7 @@ impl SampleGrid2d {
         self.sample_cached(gridmap, &mut SmallRng::from_entropy(), (x, y))
     }
 
-    /// Samples a cell with a given chance caching the random number generator
+    /// Samples a cell with a given chance caching from a random number generator
     pub fn sample_cached<'a>(&self, gridmap: &'a mut BitPackedGrid2d, rng: &mut SmallRng, (x, y): (usize, usize)) -> bool {
         let value = self.sample_grid[x][y].state != 0.0
             && rng.gen::<f32>() < self.sample_grid[x][y].state;
@@ -167,7 +166,7 @@ impl SampleGrid2d {
         }
     }
 
-    /// Samples a cell with a given chance
+    /// Samples a cell around a radius
     pub fn sample_radius<'a>(
         &self,
         gridmap: &'a mut BitPackedGrid2d,
@@ -183,7 +182,7 @@ impl SampleGrid2d {
         self.sample_area(gridmap, (0, 0), self.width, self.height)
     }
 
-    /// Sample the same cells that are found on thbe sampled before grid. Used in case where one
+    /// Sample the same cells that are found on the sampled before grid. Used in case where one
     /// wants to use the memory of previously sampled grids to sample new grids.
     pub fn sample_based_on_grid<'a>(
         &self,
@@ -200,10 +199,8 @@ impl SampleGrid2d {
         }
     }
 
-    /// Samples a cell with a given chance
-    /// ## Arguments
-    /// * `(x, y)` - The coordinate of the cell
-    /// * `measurement_covariance` - The variance of the measurement where 0.0 is a perfect measurement
+    /// Updates a cell within the grid, where the `measurement_covariance` is the 
+    /// variance of the measurement where 0.0 is a perfect measurement
     pub fn update_node(&mut self, (x, y): (usize, usize), measurement_covariance: f32) {
         let measurement = self.ground_truth.get_value((x, y)) as u8 as f32;
         self.sample_grid[x][y].update(measurement, measurement_covariance);
@@ -227,12 +224,6 @@ impl SampleGrid2d {
         kernel
     }
 
-    fn adjacent_override(&mut self, (x, y): (usize, usize)) {
-        for (i, j) in self.adjacent((x, y), false).collect::<Vec<_>>() {
-            self.sample_grid[i][j].state = self.ground_truth.get_value((i, j)) as u8 as f32;
-        }
-    }
-
     /// Updates nodes based upon a kernal
     fn update_kernel(&mut self, (x, y): (usize, usize), kernel: Matrix<Option<f32>>) {
         for (n, (i, j)) in matrix_overlay(self.shape(), kernel.shape(), (x, y)) {
@@ -242,7 +233,7 @@ impl SampleGrid2d {
         }
     }
 
-    /// Updates nodes based on visibile nodes
+    /// Updates nodes based on visibile nodes using a kernel
     pub fn raycast_update(&mut self, (x, y): (usize, usize), kernel: &Matrix<f32>) {
         let mut kernel = SampleGrid2d::adjacency_kernel(kernel);
         let visible = self.visibility((x, y), kernel.width / 2);
@@ -254,7 +245,8 @@ impl SampleGrid2d {
         self.update_kernel((x, y), kernel);
     }
 
-
+    /// Get adjacent nodes with their probabilities, log them to make them able to
+    /// be used in a search algorithm
     pub fn adjacent_probs(
         &self,
         (x, y): (usize, usize),
@@ -270,7 +262,8 @@ impl SampleGrid2d {
             .collect()
     }
 
-    /// Samples all adjacent cells on sampling grid
+    /// Samples all adjacent cells on sampling grid, accounting for cells that 
+    /// have been sampled before
     pub fn sample_adjacenct<'a>(
         &self,
         gridmap: &'a mut BitPackedGrid2d,
@@ -296,7 +289,7 @@ impl SampleGrid2d {
 mod tests {
     use crate::{
         domains::{
-            bitpackedgrids::{bitpackedgrid2d::BitPackedGrid2d, BitPackedGrid}, Domain, GridCreate2d, GridPrint2d, GridVisibility2d,
+            bitpackedgrids::{bitpackedgrid2d::BitPackedGrid2d, BitPackedGrid}, GridDomain, GridCreate2d, GridPrint2d, GridVisibility2d,
         },
         matrix,
         util::matrix::{gaussian_kernal, Matrix},

@@ -1,29 +1,23 @@
 //! # Hashed Grid Maps
-//! A grid implementation which uses a hashset to represent obstacles
-//! This is the simplest grid implementation and is fairly slow due
-//! to the possibility of hashing collisions.
+//! A grid implementation which uses a hashset to represent valid cells. This is the 
+//! simplest grid implementation and is fairly slow due to the possibility of
+//! hashing collisions. Still within the repo for benchmarking purposes.
 
 use ahash::AHashSet;
 
-use super::{neighbors, Domain, Grid2d, GridCreate2d, GridPrint2d};
+use super::{neighbors, GridDomain, Grid2d, GridCreate2d, GridPrint2d};
 
-/// A grid map whoch uses a hashset of obstacles to represent obstacles
-/// This is the simplest grid map implementation
-/// ## Fields
-/// * `width` - The width of the grid map
-/// * `height` - The height of the grid map
-/// * `diagonal` - Whether or not diagonal movement is allowed
-/// * `valid_cells` - A hashset of cells that are traversable
+/// A grid map which uses a hashset to represent valid cells, this is a 
+/// 2-dimensional grid map.
 pub struct HashedGrid {
     pub width: usize,
     pub height: usize,
     pub valid_cells: AHashSet<usize>,
 }
 
-impl Domain for HashedGrid {
+impl GridDomain for HashedGrid {
     type Node = (usize, usize);
 
-    /// Creates a new grid map with a given width and height
     fn new((width, height): Self::Node) -> HashedGrid {
         HashedGrid {
             width,
@@ -32,8 +26,6 @@ impl Domain for HashedGrid {
         }
     }
 
-    /// Sets the value of a cell in a map. True if the cell is traversable and 
-    /// false if it is an obstacle.
     fn set_value(&mut self, (x, y): Self::Node, value: bool) {
         if value {
             self.valid_cells.insert(x + y * self.width);
@@ -55,7 +47,7 @@ impl Domain for HashedGrid {
         (x, y): Self::Node,
         diagonal: bool,
     ) -> impl Iterator<Item = (usize, usize)> + '_ {
-        neighbors((x, y), diagonal).filter(move |(x, y)| self.valid_map_value((*x, *y)))
+        neighbors((x, y), diagonal).filter(move |(x, y)| self.get_value((*x, *y)))
     }
 }
 
@@ -74,17 +66,12 @@ impl HashedGrid {
             }
         }
     }
-
-    /// Checks if a given coordinate is valid and not an obstacle
-    pub fn valid_map_value(&self, (x, y): (usize, usize)) -> bool {
-        self.bounds_check((x, y)) && self.get_value((x, y))
-    }
 }
 
 #[cfg(test)]
 mod tests {
 
-    use crate::domains::{Domain, GridCreate2d, GridPrint2d};
+    use crate::domains::{GridDomain, GridCreate2d, GridPrint2d};
 
     use super::HashedGrid;
 

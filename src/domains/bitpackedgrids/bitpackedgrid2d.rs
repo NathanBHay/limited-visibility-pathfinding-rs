@@ -1,22 +1,11 @@
-//! # Bit-Packed Grid Maps
-//! A grid map representation that uses bitpacking to store the map.
-//! This is the fastest grid map implementation, as it uses bit manipulations
-//! to change the map while also being the smallest as it compresses the map
-//! into a bitpacked array. This array is stored as an array of numbers, where
-//! each binary digit in the number represents a cell in the map. These cells
-//! are additionally padded with 2 rows and columns to avoid travelling out of
-//! bounds.
-//!
-//! This implementation is based upon Warthog's implementation of bitpacked grid
-//! maps, which can be found: https://bitbucket.org/dharabor/pathfinding/
 
 use std::vec;
 
 use crate::util::matrix::matrix_overlay;
 
-use super::{super::{neighbors, samplegrids::samplegrid2d::SampleGrid2d, Domain, Grid2d, GridCreate2d, GridPrint2d, GridVisibility2d}, BitPackedGrid};
+use super::{super::{neighbors, samplegrids::samplegrid2d::SampleGrid2d, GridDomain, Grid2d, GridCreate2d, GridPrint2d, GridVisibility2d}, BitPackedGrid};
 
-/// A grid of bits packed into usize-bit words
+/// A two-dimensional bit-packed grid map implementation
 #[derive(Clone, Debug)]
 pub struct BitPackedGrid2d {
     pub height: usize,
@@ -28,10 +17,9 @@ pub struct BitPackedGrid2d {
     map_cells: Box<[usize]>,
 }
 
-impl Domain for BitPackedGrid2d {
+impl GridDomain for BitPackedGrid2d {
     type Node = (usize, usize);
 
-    /// Creates a new grid map with a given width and height
     fn new((width, height): Self::Node) -> BitPackedGrid2d {
         let map_width_in_words = (width >> super::LOG2_BITS_PER_WORD) + 1;
         let map_width = map_width_in_words << super::LOG2_BITS_PER_WORD;
@@ -47,7 +35,6 @@ impl Domain for BitPackedGrid2d {
         }
     }
 
-    /// Set the value if a but at a given x, y coordinate to be true or false
     fn set_value(&mut self, (x, y): Self::Node, value: bool) {
         let map_id = self.get_map_id((x, y));
         let word_index = map_id >> super::LOG2_BITS_PER_WORD;
@@ -59,7 +46,6 @@ impl Domain for BitPackedGrid2d {
         }
     }
 
-    /// Get the value of a bit at a given x, y coordinate
     fn get_value(&self, (x, y): Self::Node) -> bool {
         let map_id = self.get_map_id((x, y));
         let word_index = map_id >> super::LOG2_BITS_PER_WORD;
@@ -134,7 +120,7 @@ impl BitPackedGrid2d {
 
 #[cfg(test)]
 mod tests {
-    use crate::domains::{bitpackedgrids::BitPackedGrid, Domain, GridCreate2d, GridPrint2d};
+    use crate::domains::{bitpackedgrids::BitPackedGrid, GridDomain, GridCreate2d, GridPrint2d};
 
     use super::BitPackedGrid2d;
 

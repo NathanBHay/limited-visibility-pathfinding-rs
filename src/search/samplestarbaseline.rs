@@ -1,17 +1,8 @@
-//! # SampleStar
-//! A
-//!
-//! Possible Optimisations:
-//! * Get min between epochs and amount of nodes in radius which can be sampled
-//! * Cache paths
-//! Heuristics could include ones that take into account probability of being an obstacle:
-//! `self.grid.sample_grid[x][y].state * manhattan_distance(n*, self.goal)`
-
 use rayon::prelude::*;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use crate::{
-    domains::{bitpackedgrids::{bitpackedgrid2d::BitPackedGrid2d, BitPackedGrid}, samplegrids::samplegrid2d::SampleGrid2d, Domain, Grid2d},
+    domains::{bitpackedgrids::{bitpackedgrid2d::BitPackedGrid2d, BitPackedGrid}, samplegrids::samplegrid2d::SampleGrid2d, GridDomain, Grid2d},
     util::matrix::Matrix,
 };
 
@@ -19,20 +10,11 @@ use super::{
     pathstore::PathStore, samplestar::PathStoreT, samplestarstats::SampleStarStats, BestSearch,
 };
 
-/// Sample Star Algorithm
-/// ## Arguments
-/// * `grid` - The sampling grid to search on.
-/// * `search` - The search algorithm to use.
-/// * `start` - The start node.
-/// * `goal` - The goal node.
-/// * `epoch` - The number of times to sample each node.
-/// * `kernel` - The kernel to sample with.
-/// * `path_store` - The path store to store the paths.
-/// * `no_path_store` - The path store to store the paths that don't reach the goal
-/// * `stats` - The statistics store to store the stats. Currently built into the
-/// algorithm however it could be moved out. This is due to the fact search results
-/// aren't stored so stats are calculated on the fly.
-pub struct SampleStarBaseline<S: BestSearch<(usize, usize), usize> + Sync> {
+/// Sample Star Algorithm that acts a baseline for the SampleStar algorithm.
+/// The difference is that this algorithm assumes that unexplored territory is 
+/// free, and that the goal is reachable. This is to test the performance of the
+/// SampleStar algorithm.
+pub struct SampleStarBaseline<S: BestSearch<(usize, usize), usize, usize> + Sync> {
     pub grid: SampleGrid2d,
     search: S,
     pub previous: (usize, usize),
@@ -47,8 +29,8 @@ pub struct SampleStarBaseline<S: BestSearch<(usize, usize), usize> + Sync> {
     pub sampled_before: BitPackedGrid2d,
 }
 
-impl<S: BestSearch<(usize, usize), usize> + Sync> SampleStarBaseline<S> {
-    /// Creates a new SampleStar algorithm
+impl<S: BestSearch<(usize, usize), usize, usize> + Sync> SampleStarBaseline<S> {
+    /// Creates a new SampleStar baseline algorithm
     pub fn new(
         grid: SampleGrid2d,
         search: S,
@@ -78,7 +60,8 @@ impl<S: BestSearch<(usize, usize), usize> + Sync> SampleStarBaseline<S> {
         }
     }
 
-    /// Run the algorithm for one step
+    /// Run the algorithm for one step, running multiple parallel searches to find
+    /// the best path to take, and stepping to the next node.
     pub fn step(&mut self) -> bool {
         if self.current == self.goal {
             return true;

@@ -1,4 +1,4 @@
-//! Probability Filters used within the Sampling Grid Algorithm
+//! Probability Filters used within the Sampling Grid Algorithm.
 
 use std::ops::{Add, Mul};
 

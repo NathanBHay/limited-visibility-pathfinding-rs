@@ -1,3 +1,14 @@
+//! # Search Algorithms
+//! Search algortithm implementations for pathfinding. These algorithms find 
+//! the shortest path betnween a starting node and its goal function. Traits have 
+//! been included for these searches that decrease repeated code and allow for
+//! polymorphic searches. Algorithms included are:
+//! * A* Search
+//! * D* Lite Search
+//! * Focal Search
+//! * Sample* Search
+//! * Uninformed Searches
+
 #![allow(dead_code)]
 
 use std::{cmp::Ordering, hash::Hash, sync::Arc};
@@ -14,8 +25,8 @@ pub mod samplestarstats;
 pub mod uninformed;
 
 /// Trait representation of a search algorithm, allows for polymorphic searches.
-/// A search algorithm is therefore a structure that keeps its specific functions
-/// heuristic function.
+/// A search algorithm is therefore a structure that keeps its own specific functions
+/// such as heuristic function.
 pub trait Search<N, C>
 where
     N: Hash + Eq + Clone,
@@ -57,10 +68,11 @@ where
 
 /// Trait that represents a search algorithm that can return the best next node if the goal isn't
 /// found. This algorithm also assumes parallelism.
-pub trait BestSearch<N, C>: Search<N, C>
+pub trait BestSearch<N, C, D>: Search<N, C>
 where
     N: Hash + Eq + Clone,
     C: Ord + Clone,
+    D: Ord + Clone
 {
     /// Search function that finds a path from the start node to the goal node. In the event the
     /// goal isn't found, it returns the path of the node reasoned to be the best next node
@@ -79,7 +91,7 @@ where
         match self._search(expander, start, goal) {
             (distances, Some(goal)) => reconstruct_path(&distances, goal),
             (distances, _) => {
-                let (best_node, c) = distances
+                let (best_node, _) = distances
                     .iter()
                     .filter_map(|(node, (parent, _))| match parent {
                         Some(_) => Some((node, self.get_best_heuristic()(node))),
@@ -87,17 +99,17 @@ where
                     })
                     .min_by_key(|(_, cost)| cost.clone())
                     .unwrap();
-                let (path, _) = reconstruct_path(&distances, best_node.clone());
+                let (path, c) = reconstruct_path(&distances, best_node.clone());
                 (path, c)
             }
         }
     }
 
     /// Returns the heuristic used to find the next best node rather than the goal node
-    fn get_best_heuristic(&self) -> &Arc<dyn Fn(&N) -> C + Sync + Send>;
+    fn get_best_heuristic(&self) -> &Arc<dyn Fn(&N) -> D + Sync + Send>;
 
     /// Optionally overwrite the best heuristic
-    fn set_best_heuristic(&mut self, _heuristic: Arc<dyn Fn(&N) -> C + Sync + Send>) {}
+    fn set_best_heuristic(&mut self, _heuristic: Arc<dyn Fn(&N) -> D + Sync + Send>) {}
 }
 
 /// Reconstructs a path from a given node to the start node given a cost
@@ -124,12 +136,13 @@ where
     (path, cost)
 }
 
-/// Search node used in A-Star/Focal/D-Star Binary Heap.
+/// Search node used in A-Star/Focal/D-Star Binary Heap. Includes random_key
+/// to break ties and improve performance
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub(crate) struct SearchNode<N: Eq, C: Ord> {
     node: N,
     cost: C,
-    random_key: u32, // Used to break ties, improves performance
+    random_key: u32,
 }
 
 impl <N: Eq, C: Ord> SearchNode<N, C> {
@@ -173,6 +186,7 @@ impl<T: Ord> PartialOrd for RevSome<T> {
         Some(self.cmp(other))
     }
 }
+
 #[cfg(test)]
 mod tests {
 

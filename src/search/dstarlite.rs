@@ -1,3 +1,6 @@
+//! D* Lite Search Algorithm
+//! Currently not working as of the projects end date.
+
 use ahash::AHashMap;
 
 use super::SearchNode;
@@ -230,7 +233,7 @@ mod tests {
 
     use super::*;
     use crate::domains::bitpackedgrids::bitpackedgrid2d::BitPackedGrid2d;
-    use crate::domains::{Domain, GridCreate2d};
+    use crate::domains::{GridDomain, GridCreate2d};
     use crate::heuristics::distance::manhattan_distance;
 
     #[test]

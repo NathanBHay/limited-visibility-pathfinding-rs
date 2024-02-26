@@ -1,8 +1,6 @@
 """
-This is a visualiser for pathfinding algorithms for more specific analysis of
-
-This could be optimised in the future with a faster json parser, or a faster
-visualisation library.
+This is a visualiser for pathfinding algorithms, and in particular the samplestar algorithm.
+It automatically outputs to png and uses the filename plus a number to open a step.
 """
 
 from matplotlib.colors import ListedColormap
@@ -150,7 +148,11 @@ class Visualiser:
         plt.savefig(f'{self.file_name}_final_path.png')
         self.ax.cla()
 
-def main():
+def cli():
+    """
+    CLI for the visualiser, allows for optional arguments during visualisation 
+    process.
+    """
     parser = argparse.ArgumentParser(description='Visualise pathfinding algorithms')
     parser.add_argument('file_name', type=str, nargs='+', help='The name of the file to visualise')
     parser.add_argument('-vs', '--visualise-specific', type=int, help='The specific step to visualise')
@@ -171,4 +173,4 @@ def main():
     print(f'Time taken: {time.time() - start_time}s')
 
 if __name__ == '__main__':
-    main()
+    cli()

@@ -42,7 +42,8 @@ pub fn raycast_matrix(
     visible_matrix
 }
 
-/// Shadowcasting implementation for field of view
+/// Shadowcasting implementation for field of view, while not used within the 
+/// library, it is included for completeness :/
 /// 
 /// Adapted from java versions found at:
 /// https://www.roguebasin.com/index.php/Improved_Shadowcasting_in_Java
@@ -156,7 +157,7 @@ fn lightcast(
 
 #[cfg(test)]
 mod tests {
-    use crate::{domains::{bitpackedgrids::bitpackedgrid2d::BitPackedGrid2d, Domain, Grid2d, GridCreate2d}, matrix, util::matrix::Matrix};
+    use crate::{domains::{bitpackedgrids::bitpackedgrid2d::BitPackedGrid2d, GridDomain, Grid2d, GridCreate2d}, matrix, util::matrix::Matrix};
 
     use super::{raycast_matrix, shadowcasting};
 

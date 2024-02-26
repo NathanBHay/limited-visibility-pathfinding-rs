@@ -4,6 +4,7 @@
 //! * Euclidean Distance
 //! * Chebyshev Distance
 //! * Octile Distance
+//! * Probability Heuristics
 
 #![allow(dead_code)]
 pub mod distance;

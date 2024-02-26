@@ -1,18 +1,9 @@
-//! # SampleStar
-//! A
-//!
-//! Possible Optimisations:
-//! * Get min between epochs and amount of nodes in radius which can be sampled
-//! * Cache paths
-//! Heuristics could include ones that take into account probability of being an obstacle:
-//! `self.grid.sample_grid[x][y].state * manhattan_distance(n*, self.goal)`
-
 use rand::SeedableRng;
 use rayon::prelude::*;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use crate::{
-    domains::{bitpackedgrids::{bitpackedgrid2d::BitPackedGrid2d, BitPackedGrid}, samplegrids::samplegrid2d::SampleGrid2d, Domain, Grid2d},
+    domains::{bitpackedgrids::{bitpackedgrid2d::BitPackedGrid2d, BitPackedGrid}, samplegrids::samplegrid2d::SampleGrid2d, GridDomain, Grid2d},
     heuristics::probability::compute_probability,
     util::{filter::KalmanNode, matrix::Matrix},
 };
@@ -27,8 +18,9 @@ pub type PathStoreT<N> = Box<dyn PathStore<N, usize>>;
 /// * `search` - The search algorithm to use.
 /// * `start` - The start node.
 /// * `goal` - The goal node.
-/// * `epoch` - The number of times to sample each node.
 /// * `kernel` - The kernel to sample with.
+//  * `final_path` - The final path to the goal.
+/// * `epoch` - The number of times to sample each node.
 /// * `path_store` - The path store to store the paths.
 /// * `no_path_store` - The path store to store the paths that don't reach the goal
 /// * `stats` - The statistics store to store the stats. Currently built into the
@@ -37,7 +29,7 @@ pub type PathStoreT<N> = Box<dyn PathStore<N, usize>>;
 pub struct SampleStar<S> 
 where
     // N: Hash + Eq + Clone,
-    S: BestSearch<(usize, usize), usize> + Sync,
+    S: BestSearch<(usize, usize), usize, (usize, usize)> + Sync,
 {
     pub grid: SampleGrid2d,
     search: S,
@@ -55,7 +47,7 @@ where
 impl<S> SampleStar<S> 
 where
     // N: Hash + Eq + Clone + Send,
-    S: BestSearch<(usize, usize), usize> + Sync,
+    S: BestSearch<(usize, usize), usize, (usize, usize)> + Sync,
 {
     /// Creates a new SampleStar algorithm
     pub fn new(
@@ -85,7 +77,8 @@ where
         }
     }
 
-    /// Run the algorithm for one step
+    /// Run the algorithm for one step, running multiple parallel searches to find
+    /// the best path to take, and stepping to the next node.
     pub fn step(&mut self) -> bool {
         if self.current == self.goal {
             return true;
